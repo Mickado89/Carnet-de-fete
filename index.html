@@ -5,20 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Carnet de Fête</title>
 
-<!-- =========================================================
-     RÉGLAGES — c'est la seule partie à modifier
-     Collez ici les deux valeurs trouvées dans Supabase
-     (Project Settings > API Keys / Data API), entre les guillemets.
-     ========================================================= -->
-<script>
-window.FETE_CONFIG = {
-  SUPABASE_URL: "https://etxfkvjxeeowwgapboeq.supabase.co",      // ex. https://abcdefgh.supabase.co
-  SUPABASE_KEY: "sb_publishable_Qv_pRdmBprLK25tRyu_tew_rX5tdC1e",     // la clé "publishable" (sb_publishable_…) ou "anon"
-  CENTRE_CARTE: [49.112366694632776, 2.2178331446662756],             // latitude, longitude où la carte s'ouvre (ici : L'Isle-Adam)
-  ZOOM: 13
-};
-</script>
-<!-- ========================================================= -->
+<!-- Les réglages (adresse Supabase, clé, centre de la carte) sont dans config.js.
+     Ce fichier index.html peut donc être remplacé par une nouvelle version sans rien recoller. -->
+<script src="config.js"></script>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -92,6 +81,16 @@ a{color:var(--accent)}
 .legend-hint{font-size:13px;color:var(--muted);margin:0}
 .banner{background:var(--sun);color:#2A1C00;border-radius:10px;padding:8px 12px;font-size:14px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .banner button{border:1px solid rgba(0,0,0,.25);background:transparent;border-radius:8px;padding:4px 10px;cursor:pointer;font:inherit;font-size:13px;color:inherit}
+.home-btn{background:var(--ink);color:var(--bg)}
+.homebox{border:1px solid var(--line);border-left:4px solid #2F6FED;border-radius:12px;padding:14px;display:grid;gap:10px;background:var(--bg)}
+.hrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hrow .lbl{font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:64px}
+.hedit{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hresult{display:grid;gap:8px}
+.hresult .big{font:800 22px/1.1 var(--f-display)}
+.hresult .links{display:flex;flex-wrap:wrap;gap:6px}
+.hresult .links a{border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;text-decoration:none;background:var(--surface)}
+.hpin{background:#2F6FED;color:#fff;border:2px solid #fff;border-radius:999px;padding:3px 9px;font:600 12px var(--f-body);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);transform:translate(-50%,-50%);display:inline-block}
 .places{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .place{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:start;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .pin{width:28px;height:28px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);background:var(--accent);display:grid;place-items:center;border:0;cursor:pointer;padding:0}
@@ -200,8 +199,24 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
         </form>
         <button class="ghost" id="fitBtn" type="button">Voir tout le parcours</button>
         <button class="ghost" id="locBtn" type="button">Où suis-je ?</button>
+        <button class="btn home-btn" id="homeBtn" type="button">Retour maison</button>
       </div>
       <div class="banner" id="placeBanner" hidden><span id="placeBannerText"></span><button id="placeCancel" type="button">Annuler</button></div>
+      <div class="homebox" id="homePanel" hidden>
+        <div class="row" style="justify-content:space-between"><h3>Retour maison</h3><button class="ghost" id="homeClose" type="button">Fermer</button></div>
+        <p class="small muted" style="margin:0">Votre adresse reste sur ce téléphone : les autres ne la voient pas.</p>
+        <div class="hrow"><span class="lbl">Arrivée</span><b id="homeDest" class="grow"></b><button class="ghost" id="homeChange" type="button">Changer</button></div>
+        <div id="homeEdit" class="hedit" hidden>
+          <form class="search" id="homeForm" autocomplete="off">
+            <input id="homeSearch" type="search" placeholder="Adresse de la maison, de l’hôtel, de la gare…" aria-label="Adresse d’arrivée">
+            <ul class="results" id="homeResults" hidden></ul>
+          </form>
+          <button class="ghost" id="homePick" type="button">Choisir sur la carte</button>
+        </div>
+        <div class="hrow"><label class="lbl" for="homeFrom">Départ</label><select id="homeFrom" class="grow"></select></div>
+        <div class="row"><button class="btn" id="homeGo" type="button">Calculer le trajet</button><button class="ghost" id="homeClear" type="button" hidden>Effacer le trajet</button></div>
+        <div id="homeResult" class="hresult"></div>
+      </div>
       <div id="map" role="application" aria-label="Carte interactive des étapes"></div>
       <p class="legend-hint">Touchez la carte pour ajouter une étape. Faites glisser une épingle pour la déplacer. Le bouton en haut à droite de la carte passe en vue satellite.</p>
       <div class="totals" id="walkTotals"></div>
@@ -342,9 +357,18 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
 
   /* ---------- Supabase ---------- */
   const configured = CFG.SUPABASE_URL && !/COLLER_ICI/.test(CFG.SUPABASE_URL) && CFG.SUPABASE_KEY && !/COLLER_ICI/.test(CFG.SUPABASE_KEY);
-  if (!configured) setStatus('Site pas encore relié à Supabase : ouvrez index.html et collez l’URL du projet et la clé publique dans le bloc RÉGLAGES en haut du fichier.');
+  if (!window.FETE_CONFIG) setStatus('Fichier config.js introuvable : ajoutez-le dans le dépôt GitHub, à côté de index.html.');
+  else if (!configured) setStatus('Site pas encore relié à Supabase : ouvrez config.js et collez l’URL du projet et la clé publique entre les guillemets.');
   if (configured && !window.supabase) setStatus('La bibliothèque Supabase n’a pas pu se charger. Vérifiez votre connexion puis rechargez la page.');
-  const sb = configured && window.supabase ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY) : null;
+  // Accepte aussi une URL collée avec /rest/v1/, une barre finale ou le lien du tableau de bord Supabase
+  function cleanUrl(u) {
+    u = String(u || '').trim();
+    const dash = u.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/i);
+    if (dash) return 'https://' + dash[1] + '.supabase.co';
+    const m = u.match(/^(https?:\/\/[^\/?#]+)/i);
+    return m ? m[1] : u;
+  }
+  const sb = configured && window.supabase ? window.supabase.createClient(cleanUrl(CFG.SUPABASE_URL), String(CFG.SUPABASE_KEY).trim()) : null;
 
   const S = { config: { title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [] };
   const DRINKS = [['biere', 'Bière'], ['vin', 'Vin'], ['cocktail', 'Cocktail'], ['shot', 'Shot'], ['soft', 'Soft'], ['eau', 'Eau']];
@@ -450,6 +474,7 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
   document.addEventListener('click', e => { if (!e.target.closest('.search')) $('#results').hidden = true; });
 
   function onMapClick(latlng) {
+    if (pickingHome) { pickingHome = false; $('#placeBanner').hidden = true; setHomeFromLatLng(latlng); return; }
     if (pendingPlaceId) {
       const id = pendingPlaceId; setPending(null);
       run(sb.from('places').update({ lat: latlng.lat, lng: latlng.lng }).eq('id', id), 'Étape placée sur la carte').then(() => reload('places')).catch(() => {});
@@ -486,7 +511,113 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     $('#placeBanner').hidden = !p;
     if (p) { $('#placeBannerText').textContent = `Touchez la carte à l’endroit de « ${p.name} ».`; $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   }
-  $('#placeCancel').addEventListener('click', () => setPending(null));
+  $('#placeCancel').addEventListener('click', () => { pickingHome = false; setPending(null); });
+
+  /* ================= RETOUR MAISON ================= */
+  let home = null; try { home = JSON.parse(lsGet('fete-home') || 'null'); } catch {}
+  let pickingHome = false;
+  const homeLayer = map ? L.layerGroup().addTo(map) : null;
+  const homeMarkerLayer = map ? L.layerGroup().addTo(map) : null;
+  function saveHome(h) { home = h; lsSet('fete-home', JSON.stringify(h)); renderHome(); clearTrip(); }
+  function renderHome() {
+    $('#homeDest').textContent = home ? home.name : 'Pas encore choisie';
+    $('#homeEdit').hidden = !!home;
+    $('#homeChange').hidden = !home;
+    if (homeMarkerLayer) {
+      homeMarkerLayer.clearLayers();
+      if (home) L.marker([home.lat, home.lng], { interactive: false, icon: L.divIcon({ className: 'mpin-wrap', html: '<div class="hpin">Maison</div>', iconSize: [0, 0] }) }).addTo(homeMarkerLayer);
+    }
+  }
+  function renderHomeFrom() {
+    const sel = $('#homeFrom'); const prev = sel.value || 'me';
+    sel.replaceChildren(el('option', { value: 'me' }, 'Ma position actuelle'));
+    S.places.forEach((p, i) => { if (p.lat != null) sel.append(el('option', { value: p.id }, `Étape ${i + 1} · ${p.name}`)); });
+    sel.value = [...sel.options].some(o => o.value === prev) ? prev : 'me';
+  }
+  async function setHomeFromLatLng(ll) {
+    const r = await reverse(ll);
+    saveHome({ name: (r && (shortAddr(r.address) || (r.display_name || '').split(',').slice(0, 2).join(','))) || 'Point choisi sur la carte', lat: ll.lat, lng: ll.lng });
+    toast('Arrivée enregistrée');
+  }
+  $('#homeBtn').addEventListener('click', () => {
+    const open = $('#homePanel').hidden;
+    $('#homePanel').hidden = !open;
+    if (open) { renderHomeFrom(); renderHome(); if (!home) setTimeout(() => $('#homeSearch').focus(), 50); }
+  });
+  $('#homeClose').addEventListener('click', () => { $('#homePanel').hidden = true; });
+  $('#homeChange').addEventListener('click', () => { $('#homeEdit').hidden = false; $('#homeSearch').focus(); });
+  $('#homePick').addEventListener('click', () => {
+    pickingHome = true; pendingPlaceId = null;
+    $('#placeBannerText').textContent = 'Touchez la carte à l’endroit de votre arrivée.';
+    $('#placeBanner').hidden = false;
+    $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  $('#homeForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = $('#homeSearch').value.trim(); if (!q) return;
+    const list = $('#homeResults'); list.hidden = false;
+    list.replaceChildren(el('li', { class: 'small muted', style: 'padding:8px 10px' }, 'Recherche…'));
+    try {
+      const res = await geocode(q);
+      list.replaceChildren();
+      if (!res.length) list.append(el('li', { class: 'small muted', style: 'padding:8px 10px' }, 'Aucun résultat. Ajoutez la ville.'));
+      res.forEach(r => list.append(el('li', {}, el('button', { type: 'button', onclick: () => {
+        list.hidden = true; $('#homeSearch').value = '';
+        saveHome({ name: r.display_name.split(',').slice(0, 3).join(',').trim(), lat: +r.lat, lng: +r.lon });
+        toast('Arrivée enregistrée');
+      } }, el('b', {}, r.name || r.display_name.split(',')[0]), el('div', { class: 'small muted' }, r.display_name)))));
+    } catch { list.replaceChildren(el('li', { class: 'small muted', style: 'padding:8px 10px' }, 'Recherche indisponible pour le moment.')); }
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('#homeForm')) $('#homeResults').hidden = true; });
+
+  const getPosition = () => new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej(new Error('geo'));
+    navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude, lng: p.coords.longitude }), rej, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  });
+  function clearTrip() { if (homeLayer) homeLayer.clearLayers(); $('#homeResult').replaceChildren(); $('#homeClear').hidden = true; }
+  $('#homeClear').addEventListener('click', clearTrip);
+  $('#homeGo').addEventListener('click', async () => {
+    if (!home) { toast('Choisissez d’abord votre arrivée.'); $('#homeEdit').hidden = false; $('#homeSearch').focus(); return; }
+    const out = $('#homeResult');
+    out.replaceChildren(el('div', { class: 'small muted' }, 'Calcul du trajet…'));
+    let from;
+    const v = $('#homeFrom').value;
+    if (v === 'me') {
+      try { from = await getPosition(); from.name = 'Ma position'; }
+      catch { out.replaceChildren(el('div', { class: 'small' }, 'Position introuvable. Autorisez la localisation, ou choisissez une étape comme départ.')); return; }
+    } else {
+      const p = S.places.find(x => x.id === v); if (!p) return;
+      from = { lat: p.lat, lng: p.lng, name: p.name };
+    }
+    let km, min, geom = null, real = false;
+    try {
+      const r = await fetch(`https://routing.openstreetmap.de/routed-foot/route/v1/driving/${from.lng},${from.lat};${home.lng},${home.lat}?overview=full&geometries=geojson`);
+      const j = await r.json();
+      if (j.code !== 'Ok') throw new Error('route');
+      km = j.routes[0].distance / 1000; min = j.routes[0].duration / 60; geom = j.routes[0].geometry.coordinates.map(c => [c[1], c[0]]); real = true;
+    } catch { km = crowKm(from, home) * DETOUR; min = km / WALK_KMH * 60; }
+    if (homeLayer) {
+      homeLayer.clearLayers();
+      const line = geom || [[from.lat, from.lng], [home.lat, home.lng]];
+      L.polyline(line, { color: '#ffffff', weight: 8, opacity: .85 }).addTo(homeLayer);
+      L.polyline(line, { color: '#2F6FED', weight: 4, dashArray: real ? null : '6 8' }).addTo(homeLayer);
+      L.circleMarker([from.lat, from.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#2F6FED', fillOpacity: 1 }).addTo(homeLayer).bindTooltip('Départ');
+      map.fitBounds(line, { padding: [40, 40] });
+      $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    const gm = mode => `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lng}&destination=${home.lat},${home.lng}&travelmode=${mode}`;
+    out.replaceChildren(
+      el('div', {}, el('span', { class: 'big' }, fmtMin(min)), el('span', { class: 'muted' }, ` à pied · ${fmtDist(km)}${real ? '' : ' (estimation)'}`)),
+      km > 3 ? el('div', { class: 'small' }, 'C’est long à pied : regardez les transports ou un taxi.') : null,
+      el('div', { class: 'links' },
+        el('a', { href: gm('transit'), target: '_blank', rel: 'noopener' }, 'Transports en commun'),
+        el('a', { href: gm('walking'), target: '_blank', rel: 'noopener' }, 'À pied, pas à pas'),
+        el('a', { href: gm('driving'), target: '_blank', rel: 'noopener' }, 'Voiture / taxi'),
+        el('a', { href: gm('bicycling'), target: '_blank', rel: 'noopener' }, 'Vélo')),
+      el('div', { class: 'small muted' }, 'Les liens ouvrent Google Maps avec le trajet déjà rempli (horaires des derniers métros, vélos en libre-service…).'));
+    $('#homeClear').hidden = false;
+  });
+  renderHome();
 
   $('#fitBtn').addEventListener('click', () => fitAll(true));
   function fitAll(animate) {
@@ -625,6 +756,7 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     $('#nPlaces').textContent = ps.length || '';
     const done = ps.filter(p => p.visited).length;
     $('#placesProgress').textContent = ps.length ? `${done} / ${ps.length} faites` : '';
+    if (!$('#homePanel').hidden) renderHomeFrom();
     const L2 = legInfo();
     const tot = $('#walkTotals'); tot.replaceChildren();
     if (L2.length) {
