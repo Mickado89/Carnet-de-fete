@@ -906,7 +906,8 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   if (window.L) {
     map = L.map('map', { zoomControl: true }).setView(CFG.CENTRE_CARTE || [48.8566, 2.3522], CFG.ZOOM || 13);
     const T = { crossOrigin: true };
-    const plan = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { ...T, subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' });
+    // CARTO : chargé sans « crossOrigin » (certains de ses serveurs ne renvoient pas l'en-tête CORS, la tuile restait alors blanche)
+    const plan = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">contributeurs OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>' });
     const sat = L.layerGroup([
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...T, maxZoom: 19, attribution: 'Imagerie &copy; Esri' }),
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { ...T, maxZoom: 19, opacity: .8 }),
@@ -927,7 +928,26 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     map.on('overlayadd overlayremove', () => { lsSet('fete-poi', JSON.stringify(POI_CATS.filter(c => map.hasLayer(poiLayers[c.key])).map(c => c.key))); loadPois(true); });
     map.on('moveend', () => loadPois(false));
     L.control.scale({ imperial: false }).addTo(map);
-    map.on('baselayerchange', e => lsSet('fete-base', e.name));
+    map.on('baselayerchange', e => { lsSet('fete-base', e.name); watchBase(e.layer, e.name); });
+    // si un fond ne répond pas (serveur bloqué, bloqueur de pub…), on revient à OpenStreetMap
+    function watchBase(layer, name) {
+      if (layer === osm) return;
+      const tiles = layer.getLayers ? layer.getLayers() : [layer];
+      let ok = 0, ko = 0, done = false;
+      const onLoad = () => { ok++; };
+      const onErr = () => {
+        ko++;
+        if (!done && ok === 0 && ko >= 6) {
+          done = true;
+          map.removeLayer(layer); osm.addTo(map); lsSet('fete-base', 'OpenStreetMap');
+          toast(`Le fond « ${name} » ne répond pas sur cet appareil : retour au plan OpenStreetMap.`);
+        }
+      };
+      tiles.forEach(t => { t.on('tileload', onLoad); t.on('tileerror', onErr); });
+      setTimeout(() => tiles.forEach(t => { t.off('tileload', onLoad); t.off('tileerror', onErr); }), 15000);
+    }
+    const startBase = bases[lsGet('fete-base')];
+    if (startBase && startBase !== osm) watchBase(startBase, lsGet('fete-base'));
     routeLayer = L.layerGroup().addTo(map);
     markersLayer = L.layerGroup().addTo(map);
     map.on('click', e => onMapClick(e.latlng));
