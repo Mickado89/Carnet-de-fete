@@ -6,6 +6,6 @@
 window.FETE_CONFIG = {
   SUPABASE_URL: "https://etxfkvjxeeowwgapboeq.supabase.co",      // ex. https://abcdefgh.supabase.co (rien après .co)
   SUPABASE_KEY: "sb_publishable_Qv_pRdmBprLK25tRyu_tew_rX5tdC1e",     // la clé "publishable" (sb_publishable_…) ou "anon"
-  CENTRE_CARTE: [48.8566, 2.3522],             // latitude, longitude où la carte s'ouvre (ici : Paris)
+  CENTRE_CARTE: [49.11240955177161, 2.2177319339433725],             // latitude, longitude où la carte s'ouvre (ici : L'Isle-Adam)
   ZOOM: 13
 };
