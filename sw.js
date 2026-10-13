@@ -2,7 +2,7 @@
 // • Le site s'ouvre même sans réseau (dernière version connue).
 // • Les bibliothèques et les fonds de carte déjà vus restent disponibles hors ligne.
 // • Les données (Supabase) ne passent jamais par ce cache : elles sont gérées par la page.
-const VERSION = 'fete-v5';
+const VERSION = 'fete-v6';
 const APP_CACHE = VERSION + '-app';
 const LIB_CACHE = VERSION + '-lib';
 const TILE_CACHE = 'fete-tiles';          // gardé d'une version à l'autre
@@ -23,7 +23,7 @@ self.addEventListener('activate', event => {
   })());
 });
 
-const isTile = u => /basemaps\.cartocdn\.com|tile\.openstreetmap\.org|arcgisonline\.com\/ArcGIS\/rest\/services/.test(u.href);
+const isTile = u => /tile\.openstreetmap\.org|arcgisonline\.com\/ArcGIS\/rest\/services/.test(u.href);
 const isLib = u => /unpkg\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com/.test(u.href);
 
 async function trimTiles() {

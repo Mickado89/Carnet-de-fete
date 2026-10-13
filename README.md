@@ -92,7 +92,7 @@ Ouvrez le lien sur le téléphone, puis touchez **Installer l'appli** en haut de
 - **Photos** : « Retirer » masque la photo pour tout le monde, mais le fichier reste dans Supabase (*Storage → photos*). Pour le supprimer définitivement, passez par Supabase.
 - **Mise en veille** : un projet Supabase gratuit se met en pause après environ une semaine sans visite. Ouvrez le site la veille de la fête. S'il est en pause, cliquez sur *Restore project* dans Supabase.
 - **Services utilisés pour la carte** :
-  - fond de carte par défaut : OpenStreetMap (plan clair CARTO et satellite Esri en option) ;
+  - fonds de carte : OpenStreetMap (par défaut et en version « plan clair » adoucie), satellite Esri en option ;
   - lieux affichés (bars, restos, toilettes…) : OpenStreetMap en direct via l'API Overpass ;
   - adresses et itinéraires à pied : OpenStreetMap ;
   - trajets en transports, voiture ou vélo : liens vers Google Maps.

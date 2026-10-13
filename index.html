@@ -104,6 +104,11 @@ td.r,th.r{text-align:right}
 .feedwrap{position:relative}
 
 /* ---- carte ---- */
+/* plan clair : OSM désaturé et éclairci */
+.tiles-light{filter:saturate(.35) brightness(1.08) contrast(.92)}
+.press-ring{position:absolute;z-index:650;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;border:3px solid var(--accent);pointer-events:none;opacity:.9}
+@media (prefers-reduced-motion:no-preference){.press-ring{animation:pressRing .55s linear forwards}}
+@keyframes pressRing{from{transform:scale(.3);opacity:.3}to{transform:scale(1);opacity:.95}}
 #map{height:min(62vh,560px);min-height:340px;border-radius:12px;border:1px solid var(--line);z-index:1}
 .maptools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .search{position:relative;flex:1 1 240px;min-width:0}
@@ -352,7 +357,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
         <div id="homeResult" class="hresult"></div>
       </div>
       <div id="map" role="application" aria-label="Carte interactive des étapes"></div>
-      <p class="legend-hint">Touchez la carte pour ajouter une étape. Faites glisser une épingle pour la déplacer. Le bouton en haut à droite de la carte change le fond (OpenStreetMap, plan clair, satellite) et affiche les bars, restos, toilettes, distributeurs… issus d’OpenStreetMap en direct.</p>
+      <p class="legend-hint"><b>Appui long</b> sur la carte (clic droit sur ordinateur) pour ajouter une étape. Faites glisser une épingle pour la déplacer. Le bouton en haut à droite de la carte change le fond (OpenStreetMap, plan clair, satellite) et affiche les bars, restos, toilettes, distributeurs… issus d’OpenStreetMap en direct.</p>
       <p class="legend-hint" id="poiHint" hidden></p>
       <div class="totals" id="walkTotals"></div>
     </div>
@@ -906,8 +911,9 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   if (window.L) {
     map = L.map('map', { zoomControl: true }).setView(CFG.CENTRE_CARTE || [48.8566, 2.3522], CFG.ZOOM || 13);
     const T = { crossOrigin: true };
-    // CARTO : chargé sans « crossOrigin » (certains de ses serveurs ne renvoient pas l'en-tête CORS, la tuile restait alors blanche)
-    const plan = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">contributeurs OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>' });
+    // « Plan clair » = les tuiles OpenStreetMap (le serveur qui fonctionne déjà), adoucies par un filtre CSS.
+    // Plus aucune dépendance à CARTO, qui ne répondait pas chez certains utilisateurs.
+    const plan = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...T, maxZoom: 19, className: 'tiles-light', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">contributeurs OpenStreetMap</a>' });
     const sat = L.layerGroup([
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...T, maxZoom: 19, attribution: 'Imagerie &copy; Esri' }),
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { ...T, maxZoom: 19, opacity: .8 }),
@@ -951,6 +957,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     routeLayer = L.layerGroup().addTo(map);
     markersLayer = L.layerGroup().addTo(map);
     map.on('click', e => onMapClick(e.latlng));
+    setupLongPress();
   } else {
     $('#map').replaceChildren(el('div', { class: 'empty', style: 'height:100%;display:grid;place-items:center' }, 'La carte n’a pas pu se charger. Vérifiez votre connexion.'));
   }
@@ -1064,14 +1071,57 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   document.addEventListener('click', e => { if (!e.target.closest('#searchForm')) $('#results').hidden = true; });
 
   function onMapClick(latlng) {
+    if (Date.now() < suppressClickUntil) return;
     if (pickingHome) { pickingHome = false; $('#placeBanner').hidden = true; setHomeFromLatLng(latlng); return; }
     if (pendingPlaceId) {
       const id = pendingPlaceId; setPending(null);
       if (write('places', 'update', { lat: latlng.lat, lng: latlng.lng }, { id })) toast('Étape placée sur la carte');
       return;
     }
-    openAddPopup(latlng, '', '');
+    // un appui court ne fait rien : l'ajout d'étape se fait par appui long
+    if (!shortTapHinted) { shortTapHinted = true; toast('Appui long sur la carte pour ajouter une étape ici.'); }
   }
+  let shortTapHinted = false;
+
+  /* appui long (téléphone : doigt maintenu ~0,5 s ; ordinateur : bouton maintenu ou clic droit) */
+  function setupLongPress() {
+    const box = map.getContainer();
+    const HOLD = 550, MOVE = 10;
+    let timer = null, start = null, ring = null, pointers = 0, lastOpen = 0;
+    const cancel = () => { clearTimeout(timer); timer = null; if (ring) { ring.remove(); ring = null; } };
+    const fire = (clientX, clientY) => {
+      if (Date.now() - lastOpen < 800) return;
+      lastOpen = Date.now();
+      const r = box.getBoundingClientRect();
+      const latlng = map.containerPointToLatLng([clientX - r.left, clientY - r.top]);
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch {} }
+      suppressClickUntil = Date.now() + 600;
+      openAddPopup(latlng, '', '');
+    };
+    box.addEventListener('pointerdown', e => {
+      pointers++;
+      if (pointers > 1 || (e.pointerType === 'mouse' && e.button !== 0)) { cancel(); return; }
+      if (e.target.closest('.leaflet-marker-icon, .leaflet-control, .leaflet-popup, path.leaflet-interactive')) return;
+      start = { x: e.clientX, y: e.clientY };
+      const r = box.getBoundingClientRect();
+      ring = el('div', { class: 'press-ring', style: `left:${e.clientX - r.left}px;top:${e.clientY - r.top}px` });
+      box.append(ring);
+      timer = setTimeout(() => { const s0 = start; cancel(); if (s0) fire(s0.x, s0.y); }, HOLD);
+    });
+    // le clic qui suit un appui long fermerait aussitôt la fenêtre d'ajout : on l'arrête avant Leaflet
+    box.addEventListener('click', e => { if (Date.now() < suppressClickUntil) { e.stopPropagation(); e.preventDefault(); } }, true);
+    box.addEventListener('pointermove', e => { if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > MOVE) cancel(); });
+    const up = () => { pointers = Math.max(0, pointers - 1); cancel(); };
+    box.addEventListener('pointerup', up);
+    box.addEventListener('pointercancel', up);
+    box.addEventListener('pointerleave', () => { pointers = 0; cancel(); });
+    // clic droit sur ordinateur, ou menu natif d'un appui long sur certains téléphones
+    box.addEventListener('contextmenu', e => {
+      if (e.target.closest('.leaflet-control, .leaflet-popup')) return;
+      e.preventDefault(); cancel(); fire(e.clientX, e.clientY);
+    });
+  }
+  let suppressClickUntil = 0;
   function openAddPopup(latlng, name, address) {
     const nameIn = el('input', { id: 'popName', maxlength: 60, placeholder: 'Nom de l’étape', value: name });
     const addr = el('div', { class: 'small muted' }, address || (navigator.onLine ? 'Recherche de l’adresse…' : ''));
