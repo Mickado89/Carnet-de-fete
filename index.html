@@ -43,6 +43,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-bet
 nav.tabs{position:sticky;top:0;z-index:1000;background:var(--bg);display:flex;gap:6px;padding-block:8px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:20px}
 nav.tabs button{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 14px var(--f-body);padding:8px 14px;border-radius:999px;cursor:pointer}
 nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+@media (max-width:480px){nav.tabs{gap:4px}nav.tabs button{padding:7px 10px;font-size:13px}nav.tabs .n{margin-left:3px}}
 nav.tabs .n{font-family:var(--f-mono);font-size:11px;opacity:.7;margin-left:6px}
 section.panel{display:grid;gap:18px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
@@ -158,6 +159,58 @@ dialog{border:0;border-radius:14px;padding:0;background:var(--surface);color:var
 dialog::backdrop{background:rgba(10,12,20,.75)}
 dialog img{display:block;max-height:72vh;width:auto;margin:0 auto}
 dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}
+/* ---- retour ---- */
+.tag{font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.people{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.person{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.person .who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pill{font:500 12px var(--f-body);border-radius:999px;padding:3px 10px;white-space:nowrap;border:1px solid var(--line);color:var(--muted)}
+.pill.ok{background:var(--good);border-color:var(--good);color:#fff}
+.pill.warn{border-color:var(--bad);color:var(--bad)}
+.pill.cap{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.homebig{width:100%;min-height:56px;font:800 18px var(--f-display);border:0;border-radius:12px;background:var(--good);color:#fff;cursor:pointer}
+.homedone{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--good)}
+.captain{display:grid;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.captain .top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.capnote{font-size:13px;border-left:3px solid var(--sun);padding:6px 10px;background:var(--bg);border-radius:6px}
+
+/* ---- animation objectif ---- */
+.wanted{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:16px;background:#05070d;color:#fff;overflow:hidden;cursor:pointer}
+.wanted::before,.wanted::after{content:"";position:absolute;inset:-20%;pointer-events:none;opacity:0}
+.wanted::before{background:radial-gradient(circle at 30% 45%,rgba(40,110,255,.55),transparent 55%)}
+.wanted::after{background:radial-gradient(circle at 70% 45%,rgba(255,40,60,.5),transparent 55%)}
+.wbox{position:relative;z-index:1;display:grid;gap:14px;justify-items:center;text-align:center;max-width:520px;width:100%}
+.wstars{display:flex;gap:6px}
+.wstars svg{width:clamp(38px,11vw,58px);height:auto;filter:drop-shadow(0 0 6px rgba(255,255,255,.35))}
+.wstars .s{transform:scale(0);opacity:0}
+.wcar{width:min(100%,440px);height:auto}
+.wtitle{font:800 clamp(30px,8vw,52px)/1 var(--f-display);letter-spacing:-.01em;text-transform:uppercase;-webkit-text-stroke:1.5px #000;paint-order:stroke fill;text-shadow:3px 3px 0 #000}
+.wsub{font-size:16px;color:#d6dbea;max-width:34ch}
+.wbtn{border:2px solid #fff;background:transparent;color:#fff;font:600 15px var(--f-body);border-radius:999px;padding:10px 22px;cursor:pointer}
+.lampL,.lampR{opacity:.25}
+@media (prefers-reduced-motion:no-preference){
+  .wanted::before{animation:flashB .5s steps(1) infinite}
+  .wanted::after{animation:flashR .5s steps(1) infinite}
+  .wstars .s{animation:starIn .35s cubic-bezier(.2,1.6,.4,1) forwards, starBlink .9s steps(1) 2.2s infinite}
+  .wstars .s:nth-child(2){animation-delay:.25s,2.2s}.wstars .s:nth-child(3){animation-delay:.5s,2.2s}
+  .wstars .s:nth-child(4){animation-delay:.75s,2.2s}.wstars .s:nth-child(5){animation-delay:1s,2.2s}
+  .wcar{animation:carIn 1.1s cubic-bezier(.15,.9,.3,1) both}
+  .wheel{animation:spin .25s linear 5;transform-box:fill-box;transform-origin:center}
+  .lampL{animation:lampOn .5s steps(1) infinite}
+  .lampR{animation:lampOn .5s steps(1) .25s infinite}
+  .glowL{animation:lampOn .5s steps(1) infinite}
+  .glowR{animation:lampOn .5s steps(1) .25s infinite}
+  .wtitle{animation:titleIn .5s 1.2s both}
+}
+@media (prefers-reduced-motion:reduce){.wstars .s{transform:none;opacity:1}.lampL,.lampR{opacity:1}}
+@keyframes flashB{0%{opacity:1}50%{opacity:0}}
+@keyframes flashR{0%{opacity:0}50%{opacity:1}}
+@keyframes starIn{to{transform:scale(1);opacity:1}}
+@keyframes starBlink{0%{opacity:1}50%{opacity:.35}}
+@keyframes carIn{from{transform:translateX(-120%)}to{transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes lampOn{0%{opacity:1}50%{opacity:.15}}
+@keyframes titleIn{from{transform:scale(1.6);opacity:0}to{transform:none;opacity:1}}
 .toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:2000;max-width:90vw}
 .confirm{display:inline-flex;gap:6px;align-items:center;font-size:13px}
 </style>
@@ -184,6 +237,7 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="carte" aria-selected="true">Carte<span class="n" id="nPlaces"></span></button>
     <button role="tab" data-tab="jauge" aria-selected="false">Jauge<span class="n" id="nDrinks"></span></button>
+    <button role="tab" data-tab="retour" aria-selected="false">Retour<span class="n" id="nHome"></span></button>
     <button role="tab" data-tab="comptes" aria-selected="false">Comptes<span class="n" id="nExp"></span></button>
     <button role="tab" data-tab="photos" aria-selected="false">Photos<span class="n" id="nPhotos"></span></button>
   </nav>
@@ -248,6 +302,7 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     </div>
     <div class="card" style="display:grid;gap:12px">
       <div class="row" style="justify-content:space-between"><h3>Mes verres</h3><span class="small muted" id="myTotal"></span></div>
+      <div class="capnote" id="capNote" hidden>Vous êtes capitaine de soirée : eau et soft à volonté, ce sont eux qui vous ramènent.</div>
       <div class="drinkbtns" id="drinkBtns"></div>
       <p class="small muted" style="margin:0">Chacun compte ses propres verres depuis son téléphone. Le total se met à jour pour tout le monde.</p>
     </div>
@@ -256,6 +311,28 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
       <div id="board"></div>
     </div>
     <p class="small muted">À consommer avec modération. Un verre d’eau compte aussi dans la jauge.</p>
+  </section>
+
+  <!-- RETOUR -->
+  <section class="panel" id="tab-retour" hidden>
+    <div class="notice" id="retourNick" hidden>Tapez votre prénom en haut de la page (« Je suis ») pour apparaître dans cette liste.</div>
+    <div class="card" style="display:grid;gap:12px">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h2>Bien rentré ?</h2><span class="small muted" id="homeCount"></span>
+      </div>
+      <p class="small muted" style="margin:0">En arrivant chez vous, appuyez sur le bouton. Tout le monde voit qui est rentré et qui manque encore.</p>
+      <div id="myHome"></div>
+      <ul class="people" id="peopleList"></ul>
+      <div class="row" id="resetRow" hidden><span class="small muted">Nouvelle soirée ?</span><span id="resetSlot"></span></div>
+    </div>
+    <div class="card" style="display:grid;gap:12px">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h2>Capitaine de soirée</h2><span class="tag">Optionnel</span>
+      </div>
+      <p class="small muted" style="margin:0">Si quelqu’un prend le volant ce soir, il se déclare ici. Les passagers choisissent avec qui ils rentrent, et la jauge garde un œil sur les verres du capitaine.</p>
+      <div id="captains"></div>
+      <div id="myCaptain" class="row"></div>
+    </div>
   </section>
 
   <!-- COMPTES -->
@@ -304,6 +381,44 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     </div>
     <div class="gallery" id="gallery"></div>
   </section>
+</div>
+
+<div class="wanted" id="wanted" hidden role="dialog" aria-modal="true" aria-labelledby="wTitle">
+  <div class="wbox">
+    <div class="wstars" aria-label="5 étoiles">
+      <svg class="s" viewBox="0 0 24 24"><path d="M12 1.8l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.9l-6.4 3.5 1.4-7.1-5.3-5 7.2-.9z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg class="s" viewBox="0 0 24 24"><path d="M12 1.8l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.9l-6.4 3.5 1.4-7.1-5.3-5 7.2-.9z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg class="s" viewBox="0 0 24 24"><path d="M12 1.8l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.9l-6.4 3.5 1.4-7.1-5.3-5 7.2-.9z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg class="s" viewBox="0 0 24 24"><path d="M12 1.8l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.9l-6.4 3.5 1.4-7.1-5.3-5 7.2-.9z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg class="s" viewBox="0 0 24 24"><path d="M12 1.8l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.9l-6.4 3.5 1.4-7.1-5.3-5 7.2-.9z" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </div>
+    <svg class="wcar" viewBox="0 0 440 190" aria-label="Voiture de police, gyrophare allumé">
+      <ellipse cx="220" cy="172" rx="190" ry="10" fill="rgba(0,0,0,.6)"/>
+      <ellipse class="glowL" cx="196" cy="34" rx="60" ry="30" fill="rgba(60,130,255,.45)"/>
+      <ellipse class="glowR" cx="244" cy="34" rx="60" ry="30" fill="rgba(255,50,70,.4)"/>
+      <!-- carrosserie -->
+      <path d="M30 120 Q30 98 52 94 L120 88 L160 52 Q168 46 180 46 L290 46 Q302 46 310 54 L350 90 L398 98 Q414 101 414 118 L414 140 Q414 150 404 150 L40 150 Q30 150 30 140 Z" fill="#F4F6FA" stroke="#0B1020" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M32 128 L412 128 L412 142 Q412 148 404 148 L40 148 Q32 148 32 142 Z" fill="#1B3FA6"/>
+      <!-- vitres -->
+      <path d="M134 90 L166 60 Q170 56 178 56 L228 56 L228 90 Z" fill="#9FC3F2" stroke="#0B1020" stroke-width="3"/>
+      <path d="M238 56 L288 56 Q296 56 300 60 L332 90 L238 90 Z" fill="#9FC3F2" stroke="#0B1020" stroke-width="3"/>
+      <line x1="233" y1="56" x2="233" y2="148" stroke="#0B1020" stroke-width="3"/>
+      <text x="236" y="118" text-anchor="middle" font-family="Figtree, Arial, sans-serif" font-weight="800" font-size="24" fill="#1B3FA6" letter-spacing="2">POLICE</text>
+      <!-- phares -->
+      <rect x="400" y="106" width="12" height="10" rx="3" fill="#FFE27A" stroke="#0B1020" stroke-width="2"/>
+      <rect x="32" y="106" width="10" height="10" rx="3" fill="#E5394A" stroke="#0B1020" stroke-width="2"/>
+      <!-- gyrophare -->
+      <rect x="182" y="34" width="76" height="14" rx="5" fill="#0B1020"/>
+      <rect class="lampL" x="186" y="36" width="32" height="10" rx="4" fill="#3C82FF"/>
+      <rect class="lampR" x="222" y="36" width="32" height="10" rx="4" fill="#FF3246"/>
+      <!-- roues -->
+      <g class="wheel"><circle cx="110" cy="150" r="26" fill="#0B1020"/><circle cx="110" cy="150" r="12" fill="#B8C0D4"/><rect x="108" y="128" width="4" height="44" fill="#0B1020"/></g>
+      <g class="wheel"><circle cx="340" cy="150" r="26" fill="#0B1020"/><circle cx="340" cy="150" r="12" fill="#B8C0D4"/><rect x="338" y="128" width="4" height="44" fill="#0B1020"/></g>
+    </svg>
+    <div class="wtitle" id="wTitle">Objectif atteint !</div>
+    <div class="wsub" id="wSub"></div>
+    <button class="wbtn" id="wClose" type="button">Continuer la fête</button>
+  </div>
 </div>
 
 <dialog id="lightbox">
@@ -370,7 +485,8 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
   }
   const sb = configured && window.supabase ? window.supabase.createClient(cleanUrl(CFG.SUPABASE_URL), String(CFG.SUPABASE_KEY).trim()) : null;
 
-  const S = { config: { title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [] };
+  const S = { config: { title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [], people: [] };
+  const ALCOHOL = ['biere', 'vin', 'cocktail', 'shot'];
   const DRINKS = [['biere', 'Bière'], ['vin', 'Vin'], ['cocktail', 'Cocktail'], ['shot', 'Shot'], ['soft', 'Soft'], ['eau', 'Eau']];
 
   async function run(promise, okMsg) {
@@ -384,10 +500,14 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
   const LOADERS = {
     party_config: async () => { const { data } = await sb.from('party_config').select('*').eq('id', 1).maybeSingle(); S.config = data || { title: '', goal: 50 }; renderConfig(); },
     places: async () => { const { data } = await sb.from('places').select('*').order('position').order('created_at'); S.places = data || []; renderPlaces(); },
-    drinks: async () => { const { data } = await sb.from('drinks').select('*'); S.drinks = data || []; renderDrinks(); },
+    drinks: async () => { const { data } = await sb.from('drinks').select('*'); S.drinks = data || []; S.drinksLoaded = true; renderDrinks(); },
     members: async () => { const { data } = await sb.from('members').select('*').order('created_at'); S.members = data || []; renderTricount(); },
     expenses: async () => { const { data } = await sb.from('expenses').select('*').order('created_at', { ascending: false }); S.expenses = data || []; renderTricount(); },
-    photos: async () => { const { data } = await sb.from('photos').select('*').order('created_at', { ascending: false }); S.photos = data || []; renderPhotos(); }
+    photos: async () => { const { data } = await sb.from('photos').select('*').order('created_at', { ascending: false }); S.photos = data || []; renderPhotos(); },
+    people: async () => {
+      const { data, error } = await sb.from('people').select('*').order('name');
+      S.peopleMissing = !!error; S.people = data || []; renderRetour(); renderDrinks();
+    }
   };
   const reloadTimers = {};
   const reload = t => { clearTimeout(reloadTimers[t]); reloadTimers[t] = setTimeout(() => LOADERS[t] && LOADERS[t]().catch(console.error), 250); };
@@ -794,6 +914,110 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     setTimeout(() => markerById[p.id] && markerById[p.id].openPopup(), 600);
   }
 
+  /* ================= RETOUR : bien rentré + capitaine ================= */
+  const me = () => S.people.find(p => p.device_id === deviceId);
+  const isCaptain = id => S.people.some(p => p.device_id === id && p.is_captain);
+  const meCaptain = () => isCaptain(deviceId);
+  const fmtHour = iso => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  let personQueue = Promise.resolve();
+  function savePerson(patch) {
+    if (!sb) { toast('Le site n’est pas encore relié à Supabase.'); return Promise.reject(); }
+    if (!nick.value.trim()) { toast('Tapez d’abord votre prénom en haut de la page.'); nick.focus(); return Promise.reject(); }
+    const row = { device_id: deviceId, name: myName(), updated_at: new Date().toISOString(), ...patch };
+    // mise à jour immédiate à l'écran
+    const i = S.people.findIndex(p => p.device_id === deviceId);
+    S.people = i >= 0 ? S.people.map(p => p.device_id === deviceId ? { ...p, ...row } : p) : [...S.people, { is_captain: false, ride_with: null, home_at: null, ...row }];
+    renderRetour(); renderDrinks();
+    personQueue = personQueue.then(() => run(sb.from('people').upsert(row))).catch(() => reload('people'));
+    return personQueue;
+  }
+  function renderRetour() {
+    if (S.peopleMissing) {
+      $('#myHome').replaceChildren(el('div', { class: 'notice', style: 'margin:0' }, 'Cette fonction a besoin d’une mise à jour de la base : lancez le script supabase-maj-retour.sql dans Supabase (SQL Editor), puis rechargez la page.'));
+      return;
+    }
+    const people = S.people.filter(p => (p.name || '').trim());
+    const mine = me();
+    $('#retourNick').hidden = !!nick.value.trim();
+    const homeN = people.filter(p => p.home_at).length;
+    $('#homeCount').textContent = people.length ? `${homeN} / ${people.length} rentré${homeN > 1 ? 's' : ''}` : '';
+    $('#nHome').textContent = homeN ? `${homeN}/${people.length}` : '';
+
+    // mon bouton
+    const myHome = $('#myHome'); myHome.replaceChildren();
+    if (mine && mine.home_at) {
+      myHome.append(el('div', { class: 'homedone' },
+        el('span', {}, el('b', {}, 'Vous êtes bien rentré·e'), el('span', { class: 'muted' }, ' à ' + fmtHour(mine.home_at))),
+        el('button', { class: 'ghost', type: 'button', onclick: () => savePerson({ home_at: null }).catch(() => {}) }, 'Annuler')));
+    } else {
+      myHome.append(el('button', { class: 'homebig', type: 'button', onclick: () => savePerson({ home_at: new Date().toISOString() }).then(() => toast('Bonne nuit !')).catch(() => {}) }, 'Je suis bien rentré·e'));
+    }
+
+    // la liste
+    const list = $('#peopleList'); list.replaceChildren();
+    if (!people.length) list.append(el('li', { class: 'empty' }, 'Personne pour l’instant. Chacun apparaît ici dès qu’il a tapé son prénom.'));
+    [...people].sort((a, b) => (!!a.home_at - !!b.home_at) || a.name.localeCompare(b.name, 'fr')).forEach(p => {
+      const cap = p.ride_with ? people.find(c => c.device_id === p.ride_with && c.is_captain) : null;
+      list.append(el('li', { class: 'person' },
+        el('div', { style: 'min-width:0' },
+          el('div', { class: 'who' }, p.name, p.device_id === deviceId ? el('span', { class: 'muted small' }, ' (vous)') : null),
+          p.is_captain ? el('div', { class: 'small muted' }, 'Capitaine de soirée') : cap ? el('div', { class: 'small muted' }, 'Rentre avec ' + cap.name) : null),
+        p.home_at ? el('span', { class: 'pill ok' }, 'Rentré à ' + fmtHour(p.home_at)) : el('span', { class: 'pill' }, 'Encore dehors')));
+    });
+    $('#resetRow').hidden = !homeN;
+    $('#resetSlot').replaceChildren(confirmBtn('Remettre tout le monde « dehors »', async () => {
+      try { await run(sb.from('people').update({ home_at: null }).not('home_at', 'is', null), 'Compteur remis à zéro'); reload('people'); } catch {}
+    }, 'Tout remettre à zéro'));
+
+    // capitaines
+    const caps = people.filter(p => p.is_captain);
+    const box = $('#captains'); box.replaceChildren();
+    if (!caps.length) box.append(el('div', { class: 'empty' }, 'Aucun capitaine déclaré. Normal si personne ne conduit ce soir.'));
+    caps.forEach(c => {
+      const d = S.drinks.find(x => x.device_id === c.device_id);
+      const alc = ALCOHOL.reduce((a, k) => a + ((d && d.counts && +d.counts[k]) || 0), 0);
+      const pax = people.filter(p => p.ride_with === c.device_id && !p.is_captain);
+      box.append(el('div', { class: 'captain' },
+        el('div', { class: 'top' },
+          el('b', {}, c.name, c.device_id === deviceId ? el('span', { class: 'muted small' }, ' (vous)') : null),
+          alc ? el('span', { class: 'pill warn' }, `${alc} verre${alc > 1 ? 's' : ''} d’alcool`) : el('span', { class: 'pill ok' }, 'Zéro alcool')),
+        el('div', { class: 'small muted' }, pax.length ? 'Passagers : ' + pax.map(p => p.name).join(', ') : 'Pas encore de passagers'),
+        alc ? el('div', { class: 'capnote' }, 'Le capitaine a bu : mieux vaut prévoir un autre conducteur ou un taxi.') : null));
+    });
+
+    // mes choix
+    const mc = $('#myCaptain'); mc.replaceChildren();
+    if (mine && mine.is_captain) {
+      mc.append(el('button', { class: 'ghost', type: 'button', onclick: () => savePerson({ is_captain: false }).catch(() => {}) }, 'Je ne conduis plus'));
+    } else {
+      mc.append(el('button', { class: 'btn', type: 'button', onclick: () => savePerson({ is_captain: true, ride_with: null }).then(() => toast('Merci, capitaine !')).catch(() => {}) }, 'C’est moi qui conduis'));
+      if (caps.length) {
+        const sel = el('select', { id: 'rideWith', 'aria-label': 'Je rentre avec' },
+          el('option', { value: '' }, 'Je rentre autrement'),
+          caps.map(c => el('option', { value: c.device_id }, 'Je rentre avec ' + c.name)));
+        sel.value = mine && mine.ride_with && caps.some(c => c.device_id === mine.ride_with) ? mine.ride_with : '';
+        sel.addEventListener('change', () => savePerson({ ride_with: sel.value || null }).catch(() => {}));
+        mc.append(sel);
+      }
+    }
+  }
+
+  /* ================= ANIMATION OBJECTIF ================= */
+  let lastTotal = null, wantedTimer;
+  function showWanted(goal, total) {
+    const w = $('#wanted');
+    $('#wSub').textContent = `${total} verres pour le groupe. Les clés de voiture restent au capitaine.`;
+    // relance les animations CSS
+    w.hidden = true; void w.offsetWidth; w.hidden = false;
+    w.querySelectorAll('.wstars .s, .wcar, .wheel, .wtitle').forEach(n => { n.style.animation = 'none'; void n.getBoundingClientRect(); n.style.animation = ''; });
+    clearTimeout(wantedTimer);
+    wantedTimer = setTimeout(hideWanted, 9000);
+    setTimeout(() => $('#wClose').focus(), 50);
+  }
+  function hideWanted() { clearTimeout(wantedTimer); $('#wanted').hidden = true; }
+  $('#wanted').addEventListener('click', hideWanted);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#wanted').hidden) hideWanted(); });
+
   /* ================= JAUGE ================= */
   const myRow = () => S.drinks.find(d => d.device_id === deviceId);
   const myCounts = () => ({ ...((myRow() || {}).counts || {}) });
@@ -804,6 +1028,7 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     drinkQueue = drinkQueue.then(() => run(sb.from('drinks').upsert({ device_id: deviceId, name: myName(), counts, updated_at: new Date().toISOString() }))).catch(() => reload('drinks'));
   }
   function bump(type, delta) {
+    if (delta > 0 && ALCOHOL.includes(type) && meCaptain()) toast('Vous êtes capitaine de soirée : ce verre compte. Passez le volant si besoin.');
     const c = myCounts(); c[type] = Math.max(0, (c[type] || 0) + delta);
     const i = S.drinks.findIndex(d => d.device_id === deviceId);
     const row = { device_id: deviceId, name: myName(), counts: c };
@@ -814,7 +1039,11 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
   nick.addEventListener('input', () => {
     lsSet('fete-nick', nick.value.trim());
     clearTimeout(nickT);
-    nickT = setTimeout(() => { if (myRow()) saveMyDrinks(myCounts()); }, 900);
+    nickT = setTimeout(() => {
+      if (myRow()) saveMyDrinks(myCounts());
+      if (nick.value.trim()) savePerson({});
+      renderRetour();
+    }, 900);
   });
   function renderDrinks() {
     const total = S.drinks.reduce((a, d) => a + sum(d.counts), 0);
@@ -822,7 +1051,13 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     $('#drinkTotal').textContent = total;
     $('#nDrinks').textContent = total || '';
     const pct = Math.min(1, total / goal);
-    $('#drinkPct').textContent = total >= goal ? 'Objectif atteint. Le prochain, c’est de l’eau ?' : Math.round(pct * 100) + ' % de l’objectif';
+    const pctEl = $('#drinkPct');
+    pctEl.replaceChildren(total >= goal ? 'Objectif atteint. Le prochain, c’est de l’eau ? ' : Math.round(pct * 100) + ' % de l’objectif');
+    if (total >= goal) pctEl.append(el('button', { class: 'ghost', type: 'button', onclick: () => showWanted(goal, total) }, 'Revoir les étoiles'));
+    // animation quand le groupe franchit l'objectif (une fois par objectif et par téléphone)
+    if (S.drinksLoaded && lastTotal !== null && lastTotal < goal && total >= goal && lsGet('fete-wanted') !== String(goal)) { lsSet('fete-wanted', String(goal)); showWanted(goal, total); }
+    if (S.drinksLoaded) lastTotal = total;
+    if (meCaptain() && $('#capNote')) $('#capNote').hidden = false; else if ($('#capNote')) $('#capNote').hidden = true;
     const top = 20, bottom = 285, hgt = (bottom - top) * pct;
     $('#liquid').setAttribute('y', bottom - hgt); $('#liquid').setAttribute('height', hgt);
     $('#foam').setAttribute('y', bottom - hgt - (pct > 0 ? 8 : 0)); $('#foam').setAttribute('height', pct > 0 ? 9 : 0);
@@ -834,14 +1069,14 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
       el('div', { class: 'ctl' },
         el('button', { type: 'button', 'aria-label': 'Retirer un ' + label, title: 'Retirer un verre', onclick: () => bump(k, -1), disabled: !(mine[k] > 0) }, '−'),
         el('button', { type: 'button', class: 'plus', 'aria-label': 'Ajouter un ' + label, onclick: () => bump(k, 1) }, '+ 1')))));
-    const rows = S.drinks.map(d => ({ name: d.name || 'Anonyme', me: d.device_id === deviceId, n: sum(d.counts), c: d.counts || {} })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
+    const rows = S.drinks.map(d => ({ name: d.name || 'Anonyme', me: d.device_id === deviceId, cap: isCaptain(d.device_id), n: sum(d.counts), c: d.counts || {} })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
     const board = $('#board'); board.replaceChildren();
     if (!rows.length) { board.append(el('div', { class: 'empty' }, 'Personne n’a encore trinqué. Le premier « + 1 » lance la jauge.')); return; }
     const max = rows[0].n;
     board.append(el('table', {},
       el('thead', {}, el('tr', {}, el('th', {}, 'Qui'), el('th', {}, ''), ...DRINKS.map(([, l]) => el('th', { class: 'r dcol' }, l)), el('th', { class: 'r' }, 'Total'))),
       el('tbody', {}, rows.map(r => el('tr', {},
-        el('td', {}, r.name, r.me ? el('span', { class: 'muted small' }, ' (vous)') : null,
+        el('td', {}, r.name, r.me ? el('span', { class: 'muted small' }, ' (vous)') : null, r.cap ? [' ', el('span', { class: 'pill cap' }, 'Capitaine')] : null,
           el('div', { class: 'small muted dsum' }, DRINKS.filter(([k]) => r.c[k]).map(([k, l]) => r.c[k] + ' ' + l.toLowerCase()).join(' · '))),
         el('td', { style: 'width:30%' }, el('div', { class: 'bar' }, el('i', { style: `width:${r.n / max * 100}%` }))),
         ...DRINKS.map(([k]) => el('td', { class: 'r num muted dcol' }, r.c[k] || '·')),
@@ -1011,8 +1246,8 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
 
   /* ---------- démarrage ---------- */
   const h = (location.hash || '').slice(1);
-  showTab(['carte', 'jauge', 'comptes', 'photos'].includes(h) ? h : (lsGet('fete-tab') || 'carte'));
-  renderConfig(); renderPlaces(); renderTricount(); renderPhotos();
+  showTab(['carte', 'jauge', 'retour', 'comptes', 'photos'].includes(h) ? h : (lsGet('fete-tab') || 'carte'));
+  renderConfig(); renderPlaces(); renderTricount(); renderPhotos(); renderRetour();
   if (sb) {
     Promise.all(Object.values(LOADERS).map(f => f().catch(err => { console.error(err); }))).then(() => {
       if (!S.places.length && !S.members.length) { /* base vide : normal au début */ }
