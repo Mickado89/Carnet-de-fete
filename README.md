@@ -1,80 +1,98 @@
 # Carnet de Fête
 
-Site partagé pour une fête, avec quatre onglets :
+Site partagé pour une soirée entre amis. Il s'installe comme une appli sur le téléphone et fonctionne même avec un mauvais réseau.
 
-- **Carte** : une carte interactive (plan, satellite ou OpenStreetMap) pour ajouter et organiser les étapes, avec le temps de marche entre elles.
-- **Jauge** : le compteur de boissons.
-- **Comptes** : le partage des dépenses, façon Tricount.
-- **Photos** : la galerie des souvenirs.
+| Onglet | Ce qu'on y fait |
+|---|---|
+| **Carte** | Étapes sur une vraie carte (plan, satellite) : temps de marche, votes pour la prochaine étape, photos sur chaque épingle, « Retour maison » |
+| **Jauge** | Compteur de verres du groupe, objectif avec animation « 5 étoiles » |
+| **Retour** | « Je suis bien rentré·e » et capitaine de soirée (optionnel) |
+| **Comptes** | Partage des dépenses, façon Tricount : qui doit quoi, message de remboursement à copier, bouton « Marquer remboursé » |
+| **Photos** | Galerie rangée par étape |
+| **Récap** | Le résumé du lendemain (chiffres, palmarès, photos), prêt à partager |
 
-Tout le monde utilise le même lien, sans créer de compte. Les ajouts apparaissent en direct chez les autres.
+En plus, sur toutes les pages :
 
-Le site repose sur trois éléments :
+- **Fil d'activité** : une notification quand quelqu'un ajoute une étape, une photo, une dépense ou rentre chez lui.
+- **Hors ligne** : sans réseau, les ajouts sont gardés sur le téléphone et envoyés automatiquement au retour de la connexion.
+- **Code de soirée** (optionnel) : sans le code, on peut regarder le site mais pas le modifier.
 
-| Élément | Rôle | Coût |
+## Les fichiers du dépôt
+
+| Fichier | Rôle | À modifier ? |
 |---|---|---|
-| `index.html` | le site lui-même | — |
-| GitHub Pages | héberge le site et donne le lien à partager | gratuit |
-| Supabase | garde les données partagées et les photos | gratuit (offre Free) |
-
-Comptez environ 30 minutes la première fois. Les noms des boutons dans Supabase et GitHub peuvent changer un peu d'une version à l'autre.
+| `index.html` | le site | non, il se remplace en entier à chaque mise à jour |
+| `config.js` | **vos réglages** (adresse Supabase, clé, centre de la carte) | une seule fois |
+| `sw.js`, `manifest.webmanifest` | le fonctionnement comme une appli et le hors-ligne | non |
+| `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png` | les icônes de l'appli | non |
+| `supabase.sql` | le script de la base de données | non, il se colle dans Supabase |
+| `README.md` | ce guide | non |
 
 ---
 
-## Étape 1 — Créer la base de données (Supabase)
+## Installation complète (première fois)
 
-1. Allez sur **supabase.com** et cliquez sur **Start your project**. Le plus simple est de vous connecter avec votre compte GitHub (*Continue with GitHub*).
-2. Cliquez sur **New project** et remplissez :
-   - **Name** : `carnet-de-fete`
-   - **Database Password** : cliquez sur *Generate a password* et notez-le quelque part. Il ne servira pas pour le site, mais ne le mettez jamais dans `index.html`.
-   - **Region** : *West EU (Paris)*
-   - Plan : **Free**
+### 1. La base de données (Supabase)
 
-   Cliquez sur **Create new project**, puis attendez environ 2 minutes.
-3. Dans le menu de gauche, ouvrez **SQL Editor** puis **New query**.
-4. Ouvrez le fichier `supabase.sql`, copiez **tout** son contenu, collez-le dans l'éditeur et cliquez sur **Run**. Le message attendu est *Success. No rows returned*.
-5. Récupérez les deux valeurs à coller dans le site :
-   - **Project URL** : elle est affichée sur la page d'accueil du projet ou dans *Project Settings → Data API*. Elle ressemble à `https://abcdefgh.supabase.co`.
-   - **La clé publique** : dans *Project Settings → API Keys*, copiez la **Publishable key** (`sb_publishable_…`). Si vous ne la voyez pas, prenez la clé **anon public** dans l'onglet *Legacy API keys*.
-   - ⚠️ Ne prenez **jamais** la clé *secret* ni la clé *service_role*.
+1. Créez un compte sur **supabase.com**, le plus simple étant *Continue with GitHub*. Créez ensuite un **New project** :
+   - **Region** : *West EU (Paris)* ;
+   - **Plan** : *Free* ;
+   - notez le mot de passe de la base, mais ne le mettez **jamais** dans les fichiers du site.
+2. Ouvrez **SQL Editor**, puis **New query**. Collez **tout** `supabase.sql` et cliquez sur **Run**. Le message attendu est *Success*.
+3. Notez deux valeurs :
+   - la **Project URL** (`https://abcdefgh.supabase.co`, rien après `.co`) ;
+   - la **Publishable key**, dans *Project Settings → API Keys*. À défaut, prenez la clé *anon public* dans l'onglet *Legacy API keys*. Ne prenez jamais la clé *secret* ni *service_role*.
 
-## Étape 2 — Mettre le site en ligne (GitHub Pages)
+### 2. Le site (GitHub Pages)
 
-1. Créez un compte sur **github.com** si ce n'est pas déjà fait.
-2. Cliquez sur **+** en haut à droite, puis sur **New repository**, et remplissez :
-   - **Repository name** : par exemple `fete-max`. Ce nom apparaîtra dans le lien.
-   - Cochez **Public**, car GitHub Pages est gratuit pour les dépôts publics.
-   - Cliquez sur **Create repository**.
-3. Sur la page du dépôt vide, cliquez sur le lien **uploading an existing file**. Glissez-y `index.html`, `supabase.sql` et `README.md`, puis cliquez sur **Commit changes**.
-4. Collez vos clés dans le site :
-   - cliquez sur `index.html`, puis sur l'icône **crayon** (*Edit this file*) ;
-   - dans le bloc **RÉGLAGES** en haut, remplacez `COLLER_ICI_PROJECT_URL` par la Project URL et `COLLER_ICI_CLE_PUBLIQUE` par la clé publique, en gardant les guillemets ;
-   - si la fête n'a pas lieu à Paris, changez `CENTRE_CARTE` (coordonnées de la ville) ;
-   - cliquez sur **Commit changes…**, puis encore sur **Commit changes**.
-5. Activez la publication :
-   - ouvrez l'onglet **Settings** du dépôt, puis **Pages** dans le menu de gauche ;
-   - dans **Source**, choisissez *Deploy from a branch* ;
-   - dans **Branch**, choisissez `main` et `/ (root)`, puis cliquez sur **Save**.
-6. Attendez 1 à 2 minutes, puis rechargez la page. Le lien s'affiche en haut : `https://VOTRE-PSEUDO.github.io/fete-max/`
+1. Sur **github.com**, créez un **New repository** **public**.
+2. Cliquez sur **uploading an existing file**, glissez **tous les fichiers** puis cliquez sur **Commit changes**.
+3. Ouvrez `config.js`, cliquez sur le crayon et collez vos deux valeurs entre les guillemets. Si la fête n'est pas à Paris, changez aussi `CENTRE_CARTE`. Terminez par **Commit changes**.
+4. Allez dans **Settings → Pages → Deploy from a branch**, choisissez `main` et `/ (root)`, puis cliquez sur **Save**.
+5. Après 1 à 2 minutes, le lien `https://VOTRE-PSEUDO.github.io/NOM-DU-DEPOT/` apparaît en haut de la page.
 
-## Étape 3 — Tester puis partager
+### 3. Choisir un code de soirée (optionnel)
 
-1. Ouvrez le lien. Si le bandeau jaune « pas encore relié à Supabase » s'affiche, les valeurs de l'étape 2.4 sont mal collées.
-2. Faites un test complet : ajoutez une étape en touchant la carte, un verre, un participant et une photo.
-3. Ouvrez le lien sur un deuxième téléphone : vos ajouts doivent y apparaître.
-4. Envoyez le lien à vos amis.
+1. Dans Supabase, ouvrez **SQL Editor**, puis **New query**.
+2. Collez la ligne suivante en remplaçant `MonCode` par votre code, puis cliquez sur **Run** :
+   ```sql
+   update public.fete_secret set code = 'MonCode' where id = 1;
+   ```
+3. Donnez le code à vos amis : ils le tapent une seule fois par téléphone. Les majuscules et les espaces ne comptent pas.
+4. Pour retirer le code, relancez la même ligne avec `''` (deux apostrophes) à la place de `'MonCode'`.
 
-Pour modifier le site plus tard, éditez `index.html` sur GitHub. Le site se met à jour en 1 à 2 minutes et les données ne sont pas touchées.
+### 4. Installer l'appli sur le téléphone
+
+Ouvrez le lien sur le téléphone, puis touchez **Installer l'appli** en haut de la page.
+
+- **iPhone** : dans Safari, touchez *Partager*, puis *Sur l'écran d'accueil*.
+- **Android** : dans Chrome, Android propose l'installation directement.
+
+---
+
+## Mettre à jour le site
+
+1. **Les fichiers** : sur la page du dépôt GitHub, cliquez sur **Add file → Upload files**. Glissez les fichiers reçus, sauf `config.js` qui garde vos clés, puis cliquez sur **Commit changes**. Les fichiers déposés remplacent les anciens.
+2. **La base** : si la mise à jour le demande, recollez `supabase.sql` dans *SQL Editor* et cliquez sur *Run*. Le script ne supprime aucune donnée, et vous pouvez le relancer sans risque.
+3. **La publication** : comptez 1 à 2 minutes, que vous pouvez suivre dans l'onglet **Actions**. Rechargez ensuite le site. Sur un téléphone où l'appli est installée, fermez-la complètement puis rouvrez-la. Si l'ancienne version reste affichée, rouvrez-la une deuxième fois : la première ouverture télécharge la nouvelle version.
+4. **En cas de problème** : le bouton **History** sur chaque fichier GitHub permet de revenir à une version précédente.
 
 ---
 
 ## Bon à savoir
 
-- **Qui peut modifier ?** Toute personne qui a le lien. Ne le publiez pas sur les réseaux sociaux. La clé publique visible dans `index.html` est faite pour être visible : c'est normal.
-- **Mise en veille :** un projet Supabase gratuit se met en pause après environ une semaine sans visite. Ouvrez le site la veille de la fête. S'il est en pause, cliquez sur *Restore project* dans Supabase.
-- **Carte :**
-  - les fonds de carte viennent de CARTO, OpenStreetMap et Esri (satellite) ;
-  - la recherche d'adresse utilise OpenStreetMap ;
-  - les temps de marche sont calculés sur les rues par le service piéton d'OpenStreetMap. S'il ne répond pas, le site affiche une estimation.
-- **Photos :** elles sont réduites à environ 1800 px avant l'envoi. L'offre gratuite de Supabase laisse largement la place pour plusieurs centaines de photos.
-- **Après la fête :** pour tout effacer, supprimez le projet dans Supabase (*Project Settings → General → Delete project*) et le dépôt dans GitHub (*Settings → Delete this repository*).
+- **Sécurité** :
+  - la clé publique dans `config.js` est faite pour être visible ;
+  - toutes les modifications passent par une fonction de la base, qui vérifie le code de soirée s'il y en a un ;
+  - sans code, toute personne qui a le lien peut modifier : ne le publiez pas sur les réseaux sociaux.
+- **Hors ligne** :
+  - le badge jaune « Hors ligne · 3 en attente » indique les ajouts gardés sur le téléphone ;
+  - ne videz pas les données du navigateur tant que le badge est affiché ;
+  - les photos, elles, ont besoin du réseau pour être envoyées.
+- **Photos** : « Retirer » masque la photo pour tout le monde, mais le fichier reste dans Supabase (*Storage → photos*). Pour le supprimer définitivement, passez par Supabase.
+- **Mise en veille** : un projet Supabase gratuit se met en pause après environ une semaine sans visite. Ouvrez le site la veille de la fête. S'il est en pause, cliquez sur *Restore project* dans Supabase.
+- **Services utilisés pour la carte** :
+  - fonds de carte : CARTO, OpenStreetMap et Esri (satellite) ;
+  - adresses et itinéraires à pied : OpenStreetMap ;
+  - trajets en transports, voiture ou vélo : liens vers Google Maps.
+- **Après la fête** : supprimez le projet Supabase et le dépôt GitHub pour tout effacer.
