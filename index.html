@@ -486,7 +486,17 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
   const sb = configured && window.supabase ? window.supabase.createClient(cleanUrl(CFG.SUPABASE_URL), String(CFG.SUPABASE_KEY).trim()) : null;
 
   const S = { config: { title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [], people: [] };
-  const ALCOHOL = ['biere', 'vin', 'cocktail', 'shot'];
+  const ALCOHOL = ['biere', 'vin', 'cocktail', 'shot'];   // soft et eau ne sont PAS de l'alcool
+  const normKey = k => String(k).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  // sépare les verres d'une personne en alcool / sans alcool
+  function splitDrinks(counts) {
+    let alc = 0, soft = 0;
+    for (const [k, v] of Object.entries(counts || {})) {
+      const n = +v || 0; if (n <= 0) continue;
+      if (ALCOHOL.includes(normKey(k))) alc += n; else soft += n;
+    }
+    return { alc, soft };
+  }
   const DRINKS = [['biere', 'Bière'], ['vin', 'Vin'], ['cocktail', 'Cocktail'], ['shot', 'Shot'], ['soft', 'Soft'], ['eau', 'Eau']];
 
   async function run(promise, okMsg) {
@@ -969,21 +979,8 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
       try { await run(sb.from('people').update({ home_at: null }).not('home_at', 'is', null), 'Compteur remis à zéro'); reload('people'); } catch {}
     }, 'Tout remettre à zéro'));
 
-    // capitaines
+    renderCaptainCards();
     const caps = people.filter(p => p.is_captain);
-    const box = $('#captains'); box.replaceChildren();
-    if (!caps.length) box.append(el('div', { class: 'empty' }, 'Aucun capitaine déclaré. Normal si personne ne conduit ce soir.'));
-    caps.forEach(c => {
-      const d = S.drinks.find(x => x.device_id === c.device_id);
-      const alc = ALCOHOL.reduce((a, k) => a + ((d && d.counts && +d.counts[k]) || 0), 0);
-      const pax = people.filter(p => p.ride_with === c.device_id && !p.is_captain);
-      box.append(el('div', { class: 'captain' },
-        el('div', { class: 'top' },
-          el('b', {}, c.name, c.device_id === deviceId ? el('span', { class: 'muted small' }, ' (vous)') : null),
-          alc ? el('span', { class: 'pill warn' }, `${alc} verre${alc > 1 ? 's' : ''} d’alcool`) : el('span', { class: 'pill ok' }, 'Zéro alcool')),
-        el('div', { class: 'small muted' }, pax.length ? 'Passagers : ' + pax.map(p => p.name).join(', ') : 'Pas encore de passagers'),
-        alc ? el('div', { class: 'capnote' }, 'Le capitaine a bu : mieux vaut prévoir un autre conducteur ou un taxi.') : null));
-    });
 
     // mes choix
     const mc = $('#myCaptain'); mc.replaceChildren();
@@ -1000,6 +997,27 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
         mc.append(sel);
       }
     }
+  }
+
+  // cartes des capitaines : recalculées à chaque changement de la jauge
+  function renderCaptainCards() {
+    const box = $('#captains'); if (!box || S.peopleMissing) return;
+    const people = S.people.filter(p => (p.name || '').trim());
+    const caps = people.filter(p => p.is_captain);
+    box.replaceChildren();
+    if (!caps.length) { box.append(el('div', { class: 'empty' }, 'Aucun capitaine déclaré. Normal si personne ne conduit ce soir.')); return; }
+    caps.forEach(c => {
+      const d = S.drinks.find(x => x.device_id === c.device_id);
+      const { alc, soft } = splitDrinks(d && d.counts);
+      const pax = people.filter(p => p.ride_with === c.device_id && !p.is_captain);
+      const softTxt = soft ? ` · ${soft} soft/eau` : '';
+      box.append(el('div', { class: 'captain' },
+        el('div', { class: 'top' },
+          el('b', {}, c.name, c.device_id === deviceId ? el('span', { class: 'muted small' }, ' (vous)') : null),
+          alc ? el('span', { class: 'pill warn' }, `${alc} verre${alc > 1 ? 's' : ''} d’alcool${softTxt}`) : el('span', { class: 'pill ok' }, 'Zéro alcool' + softTxt)),
+        el('div', { class: 'small muted' }, pax.length ? 'Passagers : ' + pax.map(p => p.name).join(', ') : 'Pas encore de passagers'),
+        alc ? el('div', { class: 'capnote' }, 'Le capitaine a bu de l’alcool : mieux vaut prévoir un autre conducteur ou un taxi.') : null));
+    });
   }
 
   /* ================= ANIMATION OBJECTIF ================= */
@@ -1028,7 +1046,7 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     drinkQueue = drinkQueue.then(() => run(sb.from('drinks').upsert({ device_id: deviceId, name: myName(), counts, updated_at: new Date().toISOString() }))).catch(() => reload('drinks'));
   }
   function bump(type, delta) {
-    if (delta > 0 && ALCOHOL.includes(type) && meCaptain()) toast('Vous êtes capitaine de soirée : ce verre compte. Passez le volant si besoin.');
+    if (delta > 0 && ALCOHOL.includes(normKey(type)) && meCaptain()) toast('Vous êtes capitaine de soirée : ce verre compte. Passez le volant si besoin.');
     const c = myCounts(); c[type] = Math.max(0, (c[type] || 0) + delta);
     const i = S.drinks.findIndex(d => d.device_id === deviceId);
     const row = { device_id: deviceId, name: myName(), counts: c };
@@ -1046,6 +1064,7 @@ dialog .meta{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;justify-conte
     }, 900);
   });
   function renderDrinks() {
+    renderCaptainCards();
     const total = S.drinks.reduce((a, d) => a + sum(d.counts), 0);
     const goal = S.config.goal || 50;
     $('#drinkTotal').textContent = total;
