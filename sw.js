@@ -2,7 +2,7 @@
 // • Le site s'ouvre même sans réseau (dernière version connue).
 // • Les bibliothèques et les fonds de carte déjà vus restent disponibles hors ligne.
 // • Les données (Supabase) ne passent jamais par ce cache : elles sont gérées par la page.
-const VERSION = 'fete-v3';
+const VERSION = 'fete-v4';
 const APP_CACHE = VERSION + '-app';
 const LIB_CACHE = VERSION + '-lib';
 const TILE_CACHE = 'fete-tiles';          // gardé d'une version à l'autre
@@ -38,7 +38,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
 
   // Données, itinéraires, recherche d'adresse : toujours en direct
-  if (/supabase\.co|nominatim\.openstreetmap\.org|routing\.openstreetmap\.de/.test(url.href)) return;
+  if (/supabase\.co|nominatim\.openstreetmap\.org|routing\.openstreetmap\.de|overpass-api\.de/.test(url.href)) return;
 
   // Pages et fichiers du site : réseau d'abord (toujours la dernière version), cache si hors ligne
   if (url.origin === self.location.origin) {

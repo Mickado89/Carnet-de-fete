@@ -352,7 +352,8 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
         <div id="homeResult" class="hresult"></div>
       </div>
       <div id="map" role="application" aria-label="Carte interactive des étapes"></div>
-      <p class="legend-hint">Touchez la carte pour ajouter une étape. Faites glisser une épingle pour la déplacer. Le bouton en haut à droite de la carte passe en vue satellite.</p>
+      <p class="legend-hint">Touchez la carte pour ajouter une étape. Faites glisser une épingle pour la déplacer. Le bouton en haut à droite de la carte change le fond (OpenStreetMap, plan clair, satellite) et affiche les bars, restos, toilettes, distributeurs… issus d’OpenStreetMap en direct.</p>
+      <p class="legend-hint" id="poiHint" hidden></p>
       <div class="totals" id="walkTotals"></div>
     </div>
     <div class="row" style="justify-content:space-between">
@@ -884,6 +885,20 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   /* ================================================================
      CARTE
      ================================================================ */
+  /* catégories de lieux OpenStreetMap (filtres Overpass) */
+  const POI_CATS = [
+    { key: 'bar',      label: 'Bars & pubs',      single: 'Bar',              color: '#E8452C', tags: ['"amenity"~"^(bar|pub|biergarten)$"'], match: t => ['bar', 'pub', 'biergarten'].includes(t.amenity) },
+    { key: 'club',     label: 'Boîtes de nuit',   single: 'Boîte de nuit',    color: '#8A3FFC', tags: ['"amenity"="nightclub"'], match: t => t.amenity === 'nightclub' },
+    { key: 'resto',    label: 'Restaurants',      single: 'Restaurant',       color: '#D97706', tags: ['"amenity"="restaurant"'], match: t => t.amenity === 'restaurant' },
+    { key: 'snack',    label: 'Snacks & kebabs',  single: 'Restauration rapide', color: '#B45309', tags: ['"amenity"="fast_food"'], match: t => t.amenity === 'fast_food' },
+    { key: 'shop',     label: 'Épiceries',        single: 'Épicerie',         color: '#0E9F6E', tags: ['"shop"~"^(convenience|alcohol)$"'], match: t => ['convenience', 'alcohol'].includes(t.shop) },
+    { key: 'toilets',  label: 'Toilettes',        single: 'Toilettes publiques', color: '#2F6FED', tags: ['"amenity"="toilets"'], match: t => t.amenity === 'toilets' },
+    { key: 'atm',      label: 'Distributeurs',    single: 'Distributeur',     color: '#475569', tags: ['"amenity"="atm"'], match: t => t.amenity === 'atm' },
+    { key: 'pharmacy', label: 'Pharmacies',       single: 'Pharmacie',        color: '#16A34A', tags: ['"amenity"="pharmacy"'], match: t => t.amenity === 'pharmacy' },
+    { key: 'taxi',     label: 'Stations de taxi', single: 'Station de taxi',  color: '#F6B91E', tags: ['"amenity"="taxi"'], match: t => t.amenity === 'taxi' }
+  ];
+  const poiLayers = {};
+
   let map = null, markersLayer, routeLayer, meMarker = null;
   const markerById = {};
   let pendingPlaceId = null, pickingHome = false;
@@ -897,10 +912,20 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { ...T, maxZoom: 19, opacity: .8 }),
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { ...T, maxZoom: 19 })
     ]);
-    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...T, maxZoom: 19, attribution: '&copy; OpenStreetMap' });
-    const bases = { 'Plan': plan, 'Satellite': sat, 'OpenStreetMap': osm };
-    (bases[lsGet('fete-base')] || plan).addTo(map);
-    L.control.layers(bases, null, { position: 'topright' }).addTo(map);
+    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...T, maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">contributeurs OpenStreetMap</a>' });
+    const bases = { 'OpenStreetMap': osm, 'Plan clair': plan, 'Satellite': sat };
+    (bases[lsGet('fete-base')] || osm).addTo(map);
+    // lieux OpenStreetMap en direct (Overpass), une couche par catégorie
+    const savedPoi = lsJSON('fete-poi', ['bar']);
+    const overlays = {};
+    POI_CATS.forEach(c => {
+      poiLayers[c.key] = L.layerGroup();
+      overlays[`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color};margin-right:4px"></span>${c.label}`] = poiLayers[c.key];
+      if (savedPoi.includes(c.key)) poiLayers[c.key].addTo(map);
+    });
+    L.control.layers(bases, overlays, { position: 'topright' }).addTo(map);
+    map.on('overlayadd overlayremove', () => { lsSet('fete-poi', JSON.stringify(POI_CATS.filter(c => map.hasLayer(poiLayers[c.key])).map(c => c.key))); loadPois(true); });
+    map.on('moveend', () => loadPois(false));
     L.control.scale({ imperial: false }).addTo(map);
     map.on('baselayerchange', e => lsSet('fete-base', e.name));
     routeLayer = L.layerGroup().addTo(map);
@@ -908,6 +933,74 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     map.on('click', e => onMapClick(e.latlng));
   } else {
     $('#map').replaceChildren(el('div', { class: 'empty', style: 'height:100%;display:grid;place-items:center' }, 'La carte n’a pas pu se charger. Vérifiez votre connexion.'));
+  }
+
+  /* ---- lieux OpenStreetMap en direct (API Overpass) ---- */
+  function poiQuery(c, bbox) { return c.tags.map(t => `nwr[${t}](${bbox});`).join(''); }
+  let poiTimer, poiAbort = null, poiKey = '';
+  const poiCache = {};
+  function loadPois(force) {
+    if (!map) return;
+    clearTimeout(poiTimer);
+    poiTimer = setTimeout(async () => {
+      const cats = POI_CATS.filter(c => map.hasLayer(poiLayers[c.key]));
+      if (!cats.length) return;
+      if (map.getZoom() < 15) { cats.forEach(c => poiLayers[c.key].clearLayers()); $('#poiHint').textContent = 'Zoomez davantage pour afficher les lieux OpenStreetMap.'; $('#poiHint').hidden = false; return; }
+      const b = map.getBounds().pad(0.15);
+      const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(v => v.toFixed(4)).join(',');
+      const key = bbox + '|' + cats.map(c => c.key).join(',');
+      if (!force && key === poiKey) return;
+      poiKey = key;
+      if (poiCache[key]) { drawPois(cats, poiCache[key]); return; }
+      if (!navigator.onLine) { $('#poiHint').textContent = 'Lieux OpenStreetMap indisponibles hors ligne.'; $('#poiHint').hidden = false; return; }
+      if (poiAbort) poiAbort.abort();
+      poiAbort = new AbortController();
+      $('#poiHint').textContent = 'Chargement des lieux OpenStreetMap…'; $('#poiHint').hidden = false;
+      const q = `[out:json][timeout:20];(${cats.map(c => poiQuery(c, bbox)).join('')});out center 300;`;
+      try {
+        const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: poiAbort.signal });
+        if (!r.ok) throw new Error('overpass ' + r.status);
+        const j = await r.json();
+        poiCache[key] = j.elements || [];
+        if (poiKey === key) drawPois(cats, poiCache[key]);
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        $('#poiHint').textContent = 'Le service OpenStreetMap est chargé, réessayez dans un instant (déplacez un peu la carte).'; poiKey = '';
+      }
+    }, 700);
+  }
+  function drawPois(cats, els) {
+    cats.forEach(c => poiLayers[c.key].clearLayers());
+    let n = 0;
+    els.forEach(e => {
+      const t = e.tags || {}; const lat = e.lat ?? (e.center && e.center.lat), lng = e.lon ?? (e.center && e.center.lon);
+      if (lat == null) return;
+      const c = cats.find(c => c.match(t)); if (!c) return;
+      n++;
+      const name = t.name || c.single;
+      L.circleMarker([lat, lng], { radius: 7, color: '#fff', weight: 2, fillColor: c.color, fillOpacity: .95 })
+        .bindPopup(() => poiPopup(name, t, c, lat, lng), { minWidth: 220 })
+        .addTo(poiLayers[c.key]);
+    });
+    $('#poiHint').textContent = n ? `${n} lieu${n > 1 ? 'x' : ''} OpenStreetMap affiché${n > 1 ? 's' : ''} (données en direct).` : 'Aucun lieu de ce type dans cette zone selon OpenStreetMap.';
+    $('#poiHint').hidden = false;
+  }
+  const DAYS_FR = { Mo: 'lun', Tu: 'mar', We: 'mer', Th: 'jeu', Fr: 'ven', Sa: 'sam', Su: 'dim', PH: 'fériés' };
+  const frHours = h => h === '24/7' ? '24 h/24, 7 j/7' : h.replace(/\b(Mo|Tu|We|Th|Fr|Sa|Su|PH)\b/g, d => DAYS_FR[d]).replace(/\boff\b/g, 'fermé').replace(/;\s*/g, ' · ');
+  function poiPopup(name, t, c, lat, lng) {
+    const addr = [t['addr:housenumber'] && t['addr:street'] ? t['addr:housenumber'] + ' ' + t['addr:street'] : t['addr:street'], t['addr:city']].filter(Boolean).join(', ');
+    return el('div', { class: 'pop' },
+      el('b', {}, name),
+      el('div', { class: 'small muted' }, [c.single, t.cuisine ? t.cuisine.replace(/;/g, ', ') : null].filter(Boolean).join(' · ')),
+      addr ? el('div', { class: 'small' }, addr) : null,
+      t.opening_hours ? el('div', { class: 'small' }, el('span', { class: 'muted' }, 'Horaires : '), frHours(t.opening_hours)) : el('div', { class: 'small muted' }, 'Horaires non renseignés'),
+      t.website || t['contact:website'] ? el('a', { href: t.website || t['contact:website'], target: '_blank', rel: 'noopener', class: 'small' }, 'Site web') : null,
+      el('div', { class: 'row' },
+        el('button', { class: 'btn', type: 'button', onclick: () => {
+          const last = S.places.reduce((m, p) => Math.max(m, p.position || 0), 0);
+          if (write('places', 'upsert', { id: uuid(), name, address: addr, lat, lng, visited: false, position: Math.max(Date.now() / 1000, last + 1), added_by: myName(), device_id: deviceId, created_at: nowIso() })) { toast('« ' + name + ' » ajouté aux étapes'); map.closePopup(); }
+        } }, 'Ajouter aux étapes')),
+      el('div', { class: 'small muted' }, 'Données © contributeurs OpenStreetMap'));
   }
 
   const mapsUrl = p => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.lat != null ? p.lat + ',' + p.lng : (p.address || p.name));

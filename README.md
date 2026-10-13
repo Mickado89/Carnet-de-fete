@@ -4,7 +4,7 @@ Site partagé pour une soirée entre amis. Il s'installe comme une appli sur le 
 
 | Onglet | Ce qu'on y fait |
 |---|---|
-| **Carte** | Étapes sur une vraie carte (plan, satellite) : temps de marche, votes pour la prochaine étape, photos sur chaque épingle, « Retour maison » |
+| **Carte** | Carte OpenStreetMap en direct (plus plan clair et satellite) : bars, restos, toilettes, distributeurs, taxis… affichables et ajoutables en un geste, temps de marche, votes, photos sur chaque épingle, « Retour maison » |
 | **Jauge** | Compteur de verres du groupe, objectif avec animation « 5 étoiles » |
 | **Retour** | « Je suis bien rentré·e » et capitaine de soirée (optionnel) |
 | **Comptes** | Partage des dépenses, façon Tricount : qui doit quoi, message de remboursement à copier, bouton « Marquer remboursé » |
@@ -92,7 +92,8 @@ Ouvrez le lien sur le téléphone, puis touchez **Installer l'appli** en haut de
 - **Photos** : « Retirer » masque la photo pour tout le monde, mais le fichier reste dans Supabase (*Storage → photos*). Pour le supprimer définitivement, passez par Supabase.
 - **Mise en veille** : un projet Supabase gratuit se met en pause après environ une semaine sans visite. Ouvrez le site la veille de la fête. S'il est en pause, cliquez sur *Restore project* dans Supabase.
 - **Services utilisés pour la carte** :
-  - fonds de carte : CARTO, OpenStreetMap et Esri (satellite) ;
+  - fond de carte par défaut : OpenStreetMap (plan clair CARTO et satellite Esri en option) ;
+  - lieux affichés (bars, restos, toilettes…) : OpenStreetMap en direct via l'API Overpass ;
   - adresses et itinéraires à pied : OpenStreetMap ;
   - trajets en transports, voiture ou vélo : liens vers Google Maps.
 - **Après la fête** : supprimez le projet Supabase et le dépôt GitHub pour tout effacer.
