@@ -283,6 +283,19 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes lampOn{0%{opacity:1}50%{opacity:.15}}
 @keyframes titleIn{from{transform:scale(1.6);opacity:0}to{transform:none;opacity:1}}
+/* ---- roulette ---- */
+.roulette{display:grid;gap:12px}
+.rgrid{display:grid;grid-template-columns:minmax(200px,280px) 1fr;gap:18px;align-items:center}
+@media (max-width:600px){.rgrid{grid-template-columns:1fr;justify-items:center}.rside{width:100%}}
+.wheelbox{position:relative;width:100%;max-width:280px;aspect-ratio:1}
+.wheel{width:100%;height:100%;display:block;transform:rotate(0deg)}
+.wheel.spinning{transition:transform 4.6s cubic-bezier(.12,.72,.08,1)}
+@media (prefers-reduced-motion:reduce){.wheel.spinning{transition:none}}
+.pointer{position:absolute;left:50%;top:-6px;width:34px;transform:translateX(-50%);z-index:2;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+.rside{display:grid;gap:10px;min-width:0}
+.spinbtn{min-height:48px;font-size:16px}
+.rresult{min-height:2.2em}
+.rresult .who{font:800 clamp(24px,6vw,34px)/1.1 var(--f-display)}
 .toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:4000;max-width:90vw}
 </style>
 </head>
@@ -426,6 +439,26 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
 
   <!-- COMPTES -->
   <section class="panel" id="tab-comptes" hidden>
+    <div class="card roulette" id="roulette">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h2>Roulette russe</h2><span class="tag">Qui paye la tournée ?</span>
+      </div>
+      <p class="small muted" style="margin:0">La roue tourne en même temps sur tous les téléphones. Le résultat est sans appel.</p>
+      <div class="rgrid">
+        <div class="wheelbox">
+          <svg class="pointer" viewBox="0 0 40 34" aria-hidden="true"><path d="M20 32 L4 4 L36 4 Z" fill="var(--ink)" stroke="var(--surface)" stroke-width="3" stroke-linejoin="round"/></svg>
+          <svg id="wheel" class="wheel" viewBox="-110 -110 220 220" role="img" aria-label="Roue des participants"></svg>
+        </div>
+        <div class="rside">
+          <div class="small muted">Dans la course</div>
+          <div class="chips" id="rPlayers"></div>
+          <label class="small row" style="gap:6px"><input type="checkbox" id="rSpare" checked> Épargner le dernier payeur</label>
+          <button class="btn spinbtn" id="spinBtn" type="button">Lancer la roulette</button>
+          <div id="rResult" class="rresult" aria-live="polite"></div>
+        </div>
+      </div>
+      <div id="rHistory" class="small muted"></div>
+    </div>
     <div class="card" style="display:grid;gap:10px">
       <h3>Participants aux dépenses</h3>
       <div class="chips" id="memberChips"></div>
@@ -648,9 +681,9 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   /* ================================================================
      ÉTAT LOCAL + INSTANTANÉS (le site reste lisible hors ligne)
      ================================================================ */
-  const TABLES = ['party_config', 'places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes'];
-  const PK = { party_config: ['id'], places: ['id'], drinks: ['device_id'], members: ['id'], expenses: ['id'], photos: ['id'], people: ['device_id'], votes: ['place_id', 'device_id'] };
-  const S = { config: { id: 1, title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [], people: [], votes: [], loaded: {}, dbOutdated: false };
+  const TABLES = ['party_config', 'places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes', 'spins'];
+  const PK = { party_config: ['id'], places: ['id'], drinks: ['device_id'], members: ['id'], expenses: ['id'], photos: ['id'], people: ['device_id'], votes: ['place_id', 'device_id'], spins: ['id'] };
+  const S = { config: { id: 1, title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [], people: [], votes: [], spins: [], loaded: {}, dbOutdated: false };
   const rowsOf = t => t === 'party_config' ? [S.config] : S[t];
   const setRows = (t, rows) => { if (t === 'party_config') S.config = rows[0] || { id: 1, title: '', goal: 50 }; else S[t] = rows; };
   const sameKey = (t, a, b) => PK[t].every(k => String(a[k]) === String(b[k]));
@@ -736,7 +769,8 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     expenses: () => sb.from('expenses').select('*').order('created_at', { ascending: false }),
     photos: () => sb.from('photos').select('*').order('created_at', { ascending: false }),
     people: () => sb.from('people').select('*').order('name'),
-    votes: () => sb.from('votes').select('*')
+    votes: () => sb.from('votes').select('*'),
+    spins: () => sb.from('spins').select('*').order('created_at', { ascending: false }).limit(30)
   };
   async function load(t) {
     if (!sb) return;
@@ -764,7 +798,8 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       case 'places': renderPlaces(); renderPhotoPlaceSelect(); break;
       case 'votes': renderPlaceList(); drawMarkers(); break;
       case 'drinks': renderDrinks(); break;
-      case 'members': case 'expenses': renderTricount(); break;
+      case 'members': case 'expenses': renderTricount(); renderRoulette(); break;
+      case 'spins': renderRoulette(); break;
       case 'photos': renderPhotos(); drawMarkers(); renderPlaceList(); break;
       case 'people': renderRetour(); renderDrinks(); break;
     }
@@ -863,6 +898,8 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     } else if (t === 'expenses' && !old) {
       if (n.kind === 'refund') pushActivity(`Remboursement enregistré : ${memberName(n.payer)} → ${(n.for_ids || []).map(memberName).join(', ')} (${euro(n.cents)})`);
       else pushActivity(`${who(n.added_by)} a ajouté une dépense : ${n.label || 'sans titre'} (${euro(n.cents)})`);
+    } else if (t === 'spins' && !old) {
+      pushActivity(`Roulette russe : ${memberName(n.winner)} paye la tournée !`);
     } else if (t === 'members' && !old) {
       pushActivity(`${n.name} rejoint les comptes`);
     }
@@ -1626,6 +1663,127 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       $('#eLabel').value = ''; $('#eAmount').value = ''; toast('Dépense ajoutée : ' + euro(cents));
     }
   });
+  /* ================================================================
+     ROULETTE RUSSE : qui paye la prochaine tournée
+     ================================================================ */
+  const WHEEL_COLORS = ['#E8452C', '#F6B91E', '#2F6FED', '#1F8A5B', '#8A3FFC', '#D97706', '#0E9F6E', '#C2352B'];
+  let rOut = new Set(lsJSON('fete-rout', []));       // participants écartés de la roue sur ce téléphone
+  let wheelAngle = 0, wheelOrder = [], lastAnimated = null, spinning = false;
+  const sortedSpins = () => [...S.spins].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  function candidates() {
+    let ids = S.members.filter(m => !rOut.has(m.id)).map(m => m.id);
+    const last = sortedSpins()[0];
+    if ($('#rSpare').checked && last && ids.length > 2) ids = ids.filter(id => id !== last.winner);
+    return ids;
+  }
+  function drawWheel(ids) {
+    const svg = $('#wheel'); const NS = 'http://www.w3.org/2000/svg';
+    const mk = (t, a, txt) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); if (txt != null) n.textContent = txt; return n; };
+    svg.replaceChildren();
+    wheelOrder = ids.slice();
+    if (!ids.length) { svg.append(mk('circle', { r: 100, fill: 'var(--bg)', stroke: 'var(--line)', 'stroke-width': 2 })); return; }
+    const n = ids.length, step = 360 / n;
+    ids.forEach((id, i) => {
+      const a0 = (i * step - 90) * Math.PI / 180, a1 = ((i + 1) * step - 90) * Math.PI / 180;
+      const large = step > 180 ? 1 : 0;
+      const d = n === 1 ? 'M0 -100 A100 100 0 1 1 -0.01 -100 Z' : `M0 0 L${100 * Math.cos(a0)} ${100 * Math.sin(a0)} A100 100 0 ${large} 1 ${100 * Math.cos(a1)} ${100 * Math.sin(a1)} Z`;
+      svg.append(mk('path', { d, fill: WHEEL_COLORS[i % WHEEL_COLORS.length], stroke: '#fff', 'stroke-width': 2 }));
+      const mid = (i + 0.5) * step - 90;
+      const g = mk('g', { transform: `rotate(${mid})` });
+      const name = memberName(id); const label = name.length > 11 ? name.slice(0, 10) + '…' : name;
+      g.append(mk('text', { x: 92, y: 0, 'text-anchor': 'end', 'dominant-baseline': 'middle', fill: '#fff', 'font-size': n > 8 ? 10 : 13, 'font-weight': 700, 'font-family': 'Figtree, system-ui, sans-serif', 'paint-order': 'stroke', stroke: 'rgba(0,0,0,.35)', 'stroke-width': 2 }, label));
+      svg.append(g);
+    });
+    svg.append(mk('circle', { r: 16, fill: 'var(--surface)', stroke: 'var(--ink)', 'stroke-width': 3 }));
+  }
+  function animateTo(spin) {
+    const ids = (spin.participants || []).filter(id => S.members.some(m => m.id === id));
+    if (!ids.includes(spin.winner)) { showResult(spin); return; }
+    spinning = true; $('#spinBtn').disabled = true;
+    drawWheel(ids);
+    const wheel = $('#wheel');
+    const step = 360 / ids.length, i = ids.indexOf(spin.winner);
+    // décalage pseudo-aléatoire dans la part du gagnant, identique sur tous les téléphones
+    const h = [...spin.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+    const jitter = ((h % 1000) / 1000 - 0.5) * step * 0.7;
+    const target = 360 - ((i + 0.5) * step + jitter);
+    const base = wheelAngle - (wheelAngle % 360);
+    wheelAngle = base + 360 * 6 + ((target % 360) + 360) % 360;
+    $('#rResult').replaceChildren(el('div', { class: 'muted' }, 'La roue tourne…'));
+    wheel.classList.remove('spinning'); void wheel.getBoundingClientRect();
+    wheel.classList.add('spinning');
+    wheel.style.transform = `rotate(${wheelAngle}deg)`;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(() => { spinning = false; $('#spinBtn').disabled = false; showResult(spin); renderRouletteSide(); }, reduce ? 50 : 4700);
+  }
+  function showResult(spin) {
+    const who = memberName(spin.winner);
+    const forIds = (spin.participants || []).filter(id => S.members.some(m => m.id === id));
+    $('#rResult').replaceChildren(
+      el('div', { class: 'who' }, `${who} paye la tournée !`),
+      el('div', { class: 'row', style: 'margin-top:8px' },
+        el('button', { class: 'ghost', type: 'button', onclick: () => prefillRound(spin.winner, forIds) }, 'Ajouter la tournée aux comptes')));
+  }
+  function prefillRound(payer, forIds) {
+    $('#eLabel').value = `Tournée (roulette : ${memberName(payer)})`;
+    $('#ePayer').value = payer;
+    document.querySelectorAll('#eFor input').forEach(i => { i.checked = forIds.includes(i.value); });
+    $('#expForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => $('#eAmount').focus(), 400);
+    toast('Indiquez le montant de la tournée puis « Enregistrer ».');
+  }
+  function renderRouletteSide() {
+    const box = $('#rPlayers'); box.replaceChildren();
+    if (S.members.length < 2) {
+      box.append(el('span', { class: 'small muted' }, 'Ajoutez au moins deux participants dans « Participants aux dépenses » ci-dessous.'));
+      $('#spinBtn').disabled = true;
+    } else {
+      const last = sortedSpins()[0];
+      S.members.forEach(m => {
+        const spared = $('#rSpare').checked && last && last.winner === m.id && S.members.filter(x => !rOut.has(x.id)).length > 2;
+        const lab = el('label', { class: 'check', title: spared ? 'A payé la dernière tournée' : '', style: spared ? 'opacity:.5' : null },
+          el('input', { type: 'checkbox', id: 'r-' + m.id, checked: !rOut.has(m.id) }), m.name, spared ? el('span', { class: 'muted small' }, ' (épargné)') : null);
+        lab.querySelector('input').addEventListener('change', e => {
+          if (e.target.checked) rOut.delete(m.id); else rOut.add(m.id);
+          lsSet('fete-rout', JSON.stringify([...rOut])); refreshWheel(); renderRouletteSide();
+        });
+        box.append(lab);
+      });
+      $('#spinBtn').disabled = spinning || candidates().length < 2;
+    }
+    const hist = sortedSpins().slice(0, 5);
+    $('#rHistory').replaceChildren(hist.length ? el('span', {}, 'Derniers tirages : ', hist.flatMap((h, i) => [i ? ' · ' : '', el('b', {}, memberName(h.winner)), ` (${fmtHour(h.created_at)})`])) : '');
+  }
+  // redessine la roue seulement si la liste des joueurs change (sinon on garde la position du dernier tirage)
+  function refreshWheel() {
+    if (spinning) return;
+    const c = candidates();
+    if (c.join() === wheelOrder.join() && $('#wheel').childNodes.length) return;
+    const w = $('#wheel'); w.classList.remove('spinning'); wheelAngle = 0; w.style.transform = 'rotate(0deg)';
+    drawWheel(c);
+  }
+  function renderRoulette() {
+    const latest = sortedSpins()[0];
+    if (latest && lastAnimated === null) {           // premier affichage : pas d'animation, on montre le dernier résultat
+      lastAnimated = latest.id; refreshWheel(); showResult(latest); renderRouletteSide(); return;
+    }
+    if (latest && latest.id !== lastAnimated && S.loaded.spins) {   // nouveau tirage (ici ou sur un autre téléphone)
+      lastAnimated = latest.id; renderRouletteSide(); animateTo(latest); return;
+    }
+    refreshWheel();
+    if (lastAnimated === null && S.loaded.spins) lastAnimated = '';
+    renderRouletteSide();
+  }
+  $('#rSpare').addEventListener('change', () => { if (!spinning) renderRoulette(); });
+  $('#spinBtn').addEventListener('click', () => {
+    const ids = candidates();
+    if (ids.length < 2) { toast('Il faut au moins deux personnes dans la roue.'); return; }
+    const r = crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
+    const winner = ids[Math.floor(r * ids.length)];
+    S.loaded.spins = true; if (lastAnimated === null) lastAnimated = '';
+    write('spins', 'upsert', { id: uuid(), winner, participants: ids, created_by: myName(), device_id: deviceId, created_at: nowIso() });
+  });
+
   const isRefund = x => x.kind === 'refund';
   function computeBalances() {
     const bal = Object.fromEntries(S.members.map(m => [m.id, 0]));
@@ -1892,7 +2050,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
      DÉMARRAGE
      ================================================================ */
   const h = (location.hash || '').slice(1);
-  renderConfig(); renderPlaces(); renderTricount(); renderPhotos(); renderRetour(); renderHome(); renderFeed(); renderNet(); renderPhotoPlaceSelect();
+  renderConfig(); renderPlaces(); renderTricount(); renderPhotos(); renderRetour(); renderRoulette(); renderHome(); renderFeed(); renderNet(); renderPhotoPlaceSelect();
   showTab(TABS.includes(h) ? h : (lsGet('fete-tab') || 'carte'));
   if (sb) {
     checkCodeAtStart();

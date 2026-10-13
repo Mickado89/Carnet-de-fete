@@ -7,7 +7,7 @@ Site partagé pour une soirée entre amis. Il s'installe comme une appli sur le 
 | **Carte** | Carte OpenStreetMap en direct (plus plan clair et satellite) : bars, restos, toilettes, distributeurs, taxis… affichables et ajoutables en un geste, temps de marche, votes, photos sur chaque épingle, « Retour maison » |
 | **Jauge** | Compteur de verres du groupe, objectif avec animation « 5 étoiles » |
 | **Retour** | « Je suis bien rentré·e » et capitaine de soirée (optionnel) |
-| **Comptes** | Partage des dépenses, façon Tricount : qui doit quoi, message de remboursement à copier, bouton « Marquer remboursé » |
+| **Comptes** | Roulette russe (tirage au sort partagé de qui paye la tournée) et partage des dépenses, façon Tricount : qui doit quoi, message de remboursement à copier, bouton « Marquer remboursé » |
 | **Photos** | Galerie rangée par étape |
 | **Récap** | Le résumé du lendemain (chiffres, palmarès, photos), prêt à partager |
 

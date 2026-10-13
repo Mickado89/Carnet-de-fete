@@ -1,5 +1,5 @@
 -- ============================================================
---  Carnet de Fête — script Supabase (version 3)
+--  Carnet de Fête — script Supabase (version 4)
 --
 --  À coller en entier dans : Supabase > SQL Editor > New query > Run
 --  • Nouveau projet : crée tout.
@@ -77,6 +77,15 @@ create table if not exists public.people (
   updated_at timestamptz default now()
 );
 
+create table if not exists public.spins (
+  id           uuid primary key default gen_random_uuid(),
+  winner       uuid not null references public.members(id) on delete cascade,
+  participants uuid[] not null,
+  created_by   text default '',
+  device_id    text default '',
+  created_at   timestamptz default now()
+);
+
 create table if not exists public.votes (
   place_id   uuid not null references public.places(id) on delete cascade,
   device_id  text not null,
@@ -142,6 +151,7 @@ begin
     when 'photos'       then array['id']
     when 'people'       then array['device_id']
     when 'votes'        then array['place_id', 'device_id']
+    when 'spins'        then array['id']
     else null end;
   if pk is null then raise exception 'table_interdite: %', p_table; end if;
 
@@ -216,7 +226,7 @@ grant execute on function public.check_code(text) to anon, authenticated;
 do $$
 declare t text;
 begin
-  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes'] loop
+  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "fete_all" on public.%I', t);
     execute format('drop policy if exists "fete_read" on public.%I', t);
@@ -230,7 +240,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes'] loop
+  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
