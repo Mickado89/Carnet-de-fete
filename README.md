@@ -8,8 +8,8 @@ Site partagé pour une soirée entre amis. Il s'installe comme une appli sur le 
 | **Jauge** | Compteur de verres du groupe, objectif avec animation « 5 étoiles » |
 | **Retour** | « Je suis bien rentré·e » et capitaine de soirée (optionnel) |
 | **Comptes** | Roulette russe (tirage au sort partagé de qui paye la tournée) et partage des dépenses, façon Tricount : qui doit quoi, message de remboursement à copier, bouton « Marquer remboursé » |
-| **Photos** | Galerie rangée par étape |
-| **Récap** | Le résumé du lendemain (chiffres, palmarès, photos, remboursements restants), prêt à partager · les **soirées passées** · le bouton admin **Nouvelle soirée** |
+| **Photos** | Galerie rangée par étape, avec des « j'aime » (cœur, ou double appui sur la photo agrandie) |
+| **Récap** | Le résumé du lendemain (chiffres, palmarès, podium des photos les plus aimées, remboursements restants), prêt à partager · les **soirées passées** · le bouton admin **Nouvelle soirée** |
 
 En plus, sur toutes les pages :
 

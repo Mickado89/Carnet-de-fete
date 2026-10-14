@@ -2,7 +2,7 @@
 // • Le site s'ouvre même sans réseau (dernière version connue).
 // • Les bibliothèques et les fonds de carte déjà vus restent disponibles hors ligne.
 // • Les données (Supabase) ne passent jamais par ce cache : elles sont gérées par la page.
-const VERSION = 'fete-v8';
+const VERSION = 'fete-v9';
 const APP_CACHE = VERSION + '-app';
 const LIB_CACHE = VERSION + '-lib';
 const TILE_CACHE = 'fete-tiles';          // gardé d'une version à l'autre

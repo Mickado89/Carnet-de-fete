@@ -214,6 +214,27 @@ tr.refund td{color:var(--muted)}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .ph{position:relative;border-radius:10px;overflow:hidden;background:var(--line);aspect-ratio:1;max-width:100%;border:0;padding:0;cursor:pointer}
 .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.phwrap{position:relative;min-width:0}
+.phwrap .ph{width:100%;display:block}
+.heart{position:absolute;right:6px;top:6px;display:inline-flex;align-items:center;gap:4px;border:0;border-radius:999px;padding:5px 9px 5px 7px;background:rgba(10,12,20,.55);color:#fff;font:600 13px var(--f-body);cursor:pointer;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.heart svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2}
+.heart[aria-pressed="true"] svg{fill:#FF3B5C;stroke:#FF3B5C}
+.heart .num{font-family:var(--f-mono);min-width:1ch}
+.heart.big{position:static;background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:7px 12px 7px 10px;font-size:14px;backdrop-filter:none}
+.heart.big svg{stroke:var(--ink);width:20px;height:20px}
+.heart.big[aria-pressed="true"]{border-color:#FF3B5C}
+.heart.static{cursor:default}
+.heart.static svg{fill:#FF3B5C;stroke:#FF3B5C}
+@media (prefers-reduced-motion:no-preference){.heart.pop svg{animation:heartPop .45s ease}}
+@keyframes heartPop{0%{transform:scale(1)}35%{transform:scale(1.45)}70%{transform:scale(.9)}100%{transform:scale(1)}}
+.toplikes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.toplikes .tl{position:relative;display:grid;gap:4px;min-width:0}
+.toplikes button{aspect-ratio:1;border:0;padding:0;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--line)}
+.toplikes img{width:100%;height:100%;object-fit:cover;display:block}
+.toplikes .rank{position:absolute;left:6px;top:6px;background:var(--ink);color:var(--bg);font:700 12px var(--f-mono);border-radius:999px;padding:2px 8px}
+.toplikes .meta{font-size:13px;display:flex;gap:6px;align-items:center;justify-content:space-between;min-width:0}
+.toplikes .meta span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toplikes .meta b{color:#FF3B5C;white-space:nowrap}
 .ph .cap{position:absolute;inset:auto 0 0 0;padding:18px 8px 6px;font-size:12px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.65));text-align:left}
 .drop{border:1.5px dashed var(--line);border-radius:14px;padding:18px;display:grid;gap:10px;justify-items:center;text-align:center}
 .drop.over{border-color:var(--accent);background:var(--surface)}
@@ -618,7 +639,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       <div class="small muted" id="lbBy"></div>
       <div class="row small"><label for="lbPlace" class="muted">Étape</label><select id="lbPlace"></select></div>
     </div>
-    <div class="row" id="lbActions"></div>
+    <div class="row"><span id="lbLike"></span><span class="row" id="lbActions"></span></div>
   </div>
 </dialog>
 <div class="notifs" id="notifs" aria-live="polite"></div>
@@ -718,9 +739,9 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
      ÉTAT LOCAL + INSTANTANÉS (le site reste lisible hors ligne)
      ================================================================ */
   let autoJoined = false;
-  const TABLES = ['party_config', 'places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes', 'spins'];
-  const PK = { party_config: ['id'], places: ['id'], drinks: ['device_id'], members: ['id'], expenses: ['id'], photos: ['id'], people: ['device_id'], votes: ['place_id', 'device_id'], spins: ['id'] };
-  const S = { config: { id: 1, title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [], people: [], votes: [], spins: [], loaded: {}, dbOutdated: false };
+  const TABLES = ['party_config', 'places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes', 'spins', 'photo_likes'];
+  const PK = { party_config: ['id'], places: ['id'], drinks: ['device_id'], members: ['id'], expenses: ['id'], photos: ['id'], people: ['device_id'], votes: ['place_id', 'device_id'], spins: ['id'], photo_likes: ['photo_id', 'device_id'] };
+  const S = { config: { id: 1, title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [], people: [], votes: [], spins: [], photo_likes: [], loaded: {}, dbOutdated: false };
   const rowsOf = t => t === 'party_config' ? [S.config] : S[t];
   const setRows = (t, rows) => { if (t === 'party_config') S.config = rows[0] || { id: 1, title: '', goal: 50 }; else S[t] = rows; };
   const sameKey = (t, a, b) => PK[t].every(k => String(a[k]) === String(b[k]));
@@ -812,7 +833,8 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     photos: () => sb.from('photos').select('*').order('created_at', { ascending: false }),
     people: () => sb.from('people').select('*').order('name'),
     votes: () => sb.from('votes').select('*'),
-    spins: () => sb.from('spins').select('*').order('created_at', { ascending: false }).limit(30)
+    spins: () => sb.from('spins').select('*').order('created_at', { ascending: false }).limit(30),
+    photo_likes: () => sb.from('photo_likes').select('*')
   };
   async function load(t) {
     if (!sb) return;
@@ -844,6 +866,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       case 'members': case 'expenses': renderTricount(); renderRoulette(); break;
       case 'spins': renderRoulette(); break;
       case 'photos': renderPhotos(); drawMarkers(); renderPlaceList(); break;
+      case 'photo_likes': renderPhotos(); renderLbLike(); break;
       case 'people': renderRetour(); renderDrinks(); break;
     }
     if (!$('#tab-recap').hidden) { clearTimeout(recapTimer); recapTimer = setTimeout(renderRecap, 200); }
@@ -2016,12 +2039,35 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       const img = el('img', { src: photoUrl(p.path), alt: p.caption || 'Photo de ' + (p.added_by || 'quelqu’un'), loading: 'lazy' });
       img.addEventListener('error', () => img.replaceWith(el('div', { class: 'small muted', style: 'display:grid;place-items:center;height:100%' }, navigator.onLine ? 'Photo indisponible' : 'Hors ligne')));
       const capTxt = [p.caption, pl && pl.name].filter(Boolean).join(' · ') || p.added_by;
-      g.append(el('button', { class: 'ph', type: 'button', onclick: () => openLb(p) }, img, capTxt ? el('span', { class: 'cap' }, capTxt) : null));
+      g.append(el('div', { class: 'phwrap' },
+        el('button', { class: 'ph', type: 'button', 'aria-label': 'Agrandir la photo', onclick: () => openLb(p) }, img, capTxt ? el('span', { class: 'cap' }, capTxt) : null),
+        heartBtn(p)));
     });
+  }
+  /* ---- j'aime ---- */
+  const likesOf = id => S.photo_likes.filter(l => l.photo_id === id).length;
+  const iLike = id => S.photo_likes.some(l => l.photo_id === id && l.device_id === deviceId);
+  function toggleLike(p) {
+    if (iLike(p.id)) write('photo_likes', 'delete', null, { photo_id: p.id, device_id: deviceId });
+    else write('photo_likes', 'upsert', { photo_id: p.id, device_id: deviceId, created_at: nowIso() });
+  }
+  const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.4 2.6l.9 1.5.9-1.5c.8-1.5 2.3-2.6 4.4-2.6 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>';
+  function heartBtn(p, big = false) {
+    const n = likesOf(p.id), mine = iLike(p.id);
+    const b = el('button', { class: 'heart' + (big ? ' big' : ''), type: 'button', 'aria-pressed': String(mine), 'aria-label': (mine ? 'Ne plus aimer' : 'Aimer') + ` cette photo (${n} j’aime)` });
+    b.innerHTML = HEART; b.append(el('span', { class: 'num' }, n || ''));
+    b.addEventListener('click', e => { e.stopPropagation(); if (!mine) b.classList.add('pop'); toggleLike(p); });
+    return b;
+  }
+  function renderLbLike() {
+    const slot = $('#lbLike'); if (!slot) return;
+    slot.replaceChildren();
+    if (lbPhoto && S.photos.some(x => x.id === lbPhoto.id)) slot.append(heartBtn(lbPhoto, true));
   }
   let lbPhoto = null;
   function openLb(p, readOnly = false) {
     lbPhoto = readOnly ? null : p;
+    $('#lbLike').replaceChildren();
     $('#lbPlace').closest('.row').hidden = readOnly;
     const url = photoUrl(p.path);
     $('#lbImg').src = url; $('#lbImg').alt = p.caption || '';
@@ -2036,8 +2082,18 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     a.append(el('a', { href: url + '?download=' + encodeURIComponent(p.path), class: 'small' }, 'Télécharger'));
     if (!readOnly) a.append(confirmBtn('Retirer', () => { if (write('photos', 'delete', null, { id: p.id })) { $('#lightbox').close(); toast('Photo retirée'); } }, 'Retirer la photo'));
     a.append(el('button', { class: 'ghost', type: 'button', onclick: () => $('#lightbox').close() }, 'Fermer'));
+    if (!readOnly) renderLbLike();
+    else { const n = lbArchiveLikes[p.id] || 0; const s0 = $('#lbLike'); s0.replaceChildren(); if (n) { const sp = el('span', { class: 'heart big static', 'aria-label': n + ' j’aime' }); sp.innerHTML = HEART; sp.append(el('span', { class: 'num' }, n)); s0.append(sp); } }
     if (!$('#lightbox').open) $('#lightbox').showModal();
   }
+  let lbArchiveLikes = {};
+  // double appui sur la photo agrandie = j'aime (comme sur les réseaux sociaux)
+  let lastTap = 0;
+  $('#lbImg').addEventListener('click', () => {
+    const now = Date.now();
+    if (now - lastTap < 350 && lbPhoto) { if (!iLike(lbPhoto.id)) { toggleLike(lbPhoto); const h = $('#lbLike .heart'); if (h) h.classList.add('pop'); } lastTap = 0; }
+    else lastTap = now;
+  });
   $('#lbPlace').addEventListener('change', e => { if (lbPhoto) { write('photos', 'update', { place_id: e.target.value || null }, { id: lbPhoto.id }); toast('Photo rangée'); } });
   $('#lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox') e.target.close(); });
 
@@ -2065,7 +2121,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     const photos = [...S.photos].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     const pickN = (arr, n) => arr.length <= n ? arr : Array.from({ length: n }, (_, i) => arr[Math.round(i * (arr.length - 1) / (n - 1))]);
     const topPlace = [...S.places].sort((a, b) => votesFor(b.id) - votesFor(a.id))[0];
-    return { date, done, walked, byType, alc, soft, total: alc + soft, champ, hydro, caps, spent, topPayer: topPayerId && topPayerId[1] > 0 ? { name: memberName(topPayerId[0]), cents: topPayerId[1] } : null, perHead: S.members.length ? spent / S.members.length : 0, pending, homes, out, photos, mosaic: pickN(photos, 6), topPlace: topPlace && votesFor(topPlace.id) ? topPlace : null };
+    return { date, done, walked, byType, alc, soft, total: alc + soft, champ, hydro, caps, spent, topPayer: topPayerId && topPayerId[1] > 0 ? { name: memberName(topPayerId[0]), cents: topPayerId[1] } : null, perHead: S.members.length ? spent / S.members.length : 0, pending, homes, out, photos, mosaic: pickN(photos, 6), topLiked: [...photos].map(p => ({ p, n: likesOf(p.id) })).filter(x => x.n > 0).sort((a, b) => b.n - a.n || String(a.p.created_at).localeCompare(String(b.p.created_at))).slice(0, 3), topPlace: topPlace && votesFor(topPlace.id) ? topPlace : null };
   }
   function recapText(R) {
     const L = [];
@@ -2075,7 +2131,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     if (R.champ) L.push(`🏆 Plus gros compteur : ${R.champ.name} (${R.champ.n})`);
     R.caps.forEach(c => L.push(`🚗 Capitaine : ${c.name}${c.alc ? '' : ' — zéro alcool, merci !'}`));
     if (R.spent) L.push(`💶 ${euro(R.spent)} dépensés${S.members.length ? `, soit ${euro(R.perHead)} par personne` : ''}`);
-    if (R.photos.length) L.push(`📸 ${R.photos.length} photo${R.photos.length > 1 ? "s" : ""}`);
+    if (R.photos.length) L.push(`📸 ${R.photos.length} photo${R.photos.length > 1 ? "s" : ""}${R.topLiked.length ? ` — la plus aimée : ${R.topLiked[0].p.caption ? '« ' + R.topLiked[0].p.caption + ' » ' : ''}par ${R.topLiked[0].p.added_by || 'Anonyme'} (${R.topLiked[0].n} ♥)` : ''}`);
     if (R.homes.length) L.push(`🏠 Dernier rentré : ${R.homes[R.homes.length - 1].name} à ${fmtHour(R.homes[R.homes.length - 1].home_at)}`);
     return L.join('\n');
   }
@@ -2107,6 +2163,18 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       el('ul', { class: 'awards' }, awards.map(([k, v]) => el('li', {}, el('span', { class: 'k' }, k), el('span', {}, v))))));
     if (R.mosaic.length) body.append(el('div', { class: 'card', style: 'display:grid;gap:10px' }, el('h3', {}, 'La soirée en photos'),
       el('div', { class: 'mosaic' }, (opts.archive ? R.photos : R.mosaic).map(p => el('button', { type: 'button', 'aria-label': 'Voir la photo', onclick: () => openLb(p, !!opts.archive) }, el('img', { src: photoUrl(p.path), alt: p.caption || '', loading: 'lazy' }))))));
+    if (R.topLiked.length) {
+      if (opts.archive) { lbArchiveLikes = {}; R.photos.forEach(p => { lbArchiveLikes[p.id] = likesOf(p.id); }); }
+      const medals = ['1er', '2e', '3e'];
+      const card = el('div', { class: 'card', style: 'display:grid;gap:10px' }, el('h3', {}, 'Les photos les plus aimées'),
+        el('div', { class: 'toplikes' }, R.topLiked.map((x, i) => el('div', { class: 'tl' },
+          el('button', { type: 'button', 'aria-label': `Voir la photo classée ${medals[i]}`, onclick: () => openLb(x.p, !!opts.archive) }, el('img', { src: photoUrl(x.p.path), alt: x.p.caption || '', loading: 'lazy' })),
+          el('span', { class: 'rank' }, medals[i]),
+          el('div', { class: 'meta' }, el('span', {}, x.p.caption || x.p.added_by || 'Anonyme'), el('b', {}, `${x.n} ♥`))))));
+      // placé juste après les tuiles de chiffres
+      const tiles = body.querySelector('.tiles');
+      if (tiles && tiles.nextSibling) body.insertBefore(card, tiles.nextSibling); else body.append(card);
+    }
     if (R.pending.length) body.append(el('div', { class: 'card', style: 'display:grid;gap:8px' }, el('h3', {}, 'Remboursements restant à faire'),
       R.pending.map(t => el('div', { class: 'row' }, el('b', {}, memberName(t.from)), el('span', { class: 'muted' }, 'doit'), el('b', { class: 'num' }, euro(t.cents)), el('span', { class: 'muted' }, 'à'), el('b', {}, memberName(t.to))))));
     const txt = recapText(R);
@@ -2121,7 +2189,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   /* ================================================================
      SOIRÉES PASSÉES (archives) ET NOUVELLE SOIRÉE (admin)
      ================================================================ */
-  const ARCH_KEYS = ['places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes', 'spins'];
+  const ARCH_KEYS = ['places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes', 'spins', 'photo_likes'];
   function withArchive(data, fn) {
     const saved = { config: S.config }; ARCH_KEYS.forEach(k => { saved[k] = S[k]; });
     S.config = (data.party_config || [])[0] || { title: '' };

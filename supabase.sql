@@ -1,5 +1,5 @@
 -- ============================================================
---  Carnet de Fête — script Supabase (version 5)
+--  Carnet de Fête — script Supabase (version 6)
 --
 --  À coller en entier dans : Supabase > SQL Editor > New query > Run
 --  • Nouveau projet : crée tout.
@@ -86,6 +86,13 @@ create table if not exists public.spins (
   created_by   text default '',
   device_id    text default '',
   created_at   timestamptz default now()
+);
+
+create table if not exists public.photo_likes (
+  photo_id   uuid not null references public.photos(id) on delete cascade,
+  device_id  text not null,
+  created_at timestamptz default now(),
+  primary key (photo_id, device_id)
 );
 
 create table if not exists public.votes (
@@ -180,6 +187,7 @@ begin
     when 'people'       then array['device_id']
     when 'votes'        then array['place_id', 'device_id']
     when 'spins'        then array['id']
+    when 'photo_likes'  then array['photo_id', 'device_id']
     else null end;
   if pk is null then raise exception 'table_interdite: %', p_table; end if;
 
@@ -274,7 +282,7 @@ begin
   end if;
 
   select * into cfg from public.party_config where id = 1;
-  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins'] loop
+  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins','photo_likes'] loop
     execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x', t) into rows;
     snap := snap || jsonb_build_object(t, rows);
   end loop;
@@ -284,6 +292,7 @@ begin
   returning id into a_id;
 
   -- ordre imposé par les liens entre tables
+  delete from public.photo_likes where true;
   delete from public.votes    where true;
   delete from public.spins    where true;
   delete from public.photos   where true;   -- les fichiers restent dans le stockage, l'archive les affiche
@@ -312,7 +321,7 @@ grant execute on function public.check_code(text) to anon, authenticated;
 do $$
 declare t text;
 begin
-  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins'] loop
+  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins','photo_likes'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "fete_all" on public.%I', t);
     execute format('drop policy if exists "fete_read" on public.%I', t);
@@ -331,7 +340,7 @@ create policy "fete_read" on public.archives for select to anon, authenticated u
 do $$
 declare t text;
 begin
-  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins'] loop
+  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins','photo_likes'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
