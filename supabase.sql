@@ -1,5 +1,5 @@
 -- ============================================================
---  Carnet de Fête — script Supabase (version 4)
+--  Carnet de Fête — script Supabase (version 5)
 --
 --  À coller en entier dans : Supabase > SQL Editor > New query > Run
 --  • Nouveau projet : crée tout.
@@ -18,6 +18,8 @@ create table if not exists public.party_config (
   updated_at timestamptz default now()
 );
 insert into public.party_config (id) values (1) on conflict (id) do nothing;
+alter table public.party_config add column if not exists epoch uuid not null default gen_random_uuid();   -- change à chaque nouvelle soirée
+alter table public.party_config add column if not exists started_at timestamptz default now();
 
 create table if not exists public.places (
   id         uuid primary key default gen_random_uuid(),
@@ -105,6 +107,25 @@ create table if not exists public.fete_secret (
 insert into public.fete_secret (id) values (1) on conflict (id) do nothing;
 alter table public.fete_secret enable row level security;
 revoke all on public.fete_secret from anon, authenticated;
+alter table public.fete_secret add column if not exists admin_code text not null default '';   -- code admin (nouvelle soirée)
+
+create or replace function public.check_admin(p_code text)
+returns boolean
+language sql stable security definer
+set search_path = public
+as $$
+  select coalesce((select admin_code from public.fete_secret where id = 1), '') <> ''
+     and lower(trim(coalesce(p_code, ''))) = lower(trim((select admin_code from public.fete_secret where id = 1)));
+$$;
+
+-- Les soirées passées : une ligne par soirée, avec toutes ses données
+create table if not exists public.archives (
+  id          uuid primary key default gen_random_uuid(),
+  title       text default '',
+  started_at  timestamptz,
+  archived_at timestamptz default now(),
+  data        jsonb not null
+);
 
 create or replace function public.check_code(p_code text)
 returns boolean
@@ -120,12 +141,14 @@ $$;
 --  Elle vérifie le code, n'accepte que les tables du site
 --  et ne modifie une ligne que par sa clé.
 
+drop function if exists public.fete_write(text, text, text, jsonb, jsonb);
 create or replace function public.fete_write(
   p_code  text,
   p_table text,
   p_kind  text,
   p_data  jsonb default null,
-  p_match jsonb default null
+  p_match jsonb default null,
+  p_epoch uuid  default null      -- soirée à laquelle appartient la modification
 ) returns void
 language plpgsql security definer
 set search_path = public
@@ -140,6 +163,11 @@ declare
 begin
   if not public.check_code(p_code) then
     raise exception 'code_soiree_invalide' using errcode = '28000';
+  end if;
+
+  -- une modification faite pendant une soirée terminée (téléphone resté hors ligne) est refusée
+  if p_epoch is not null and p_epoch <> (select epoch from public.party_config where id = 1) then
+    raise exception 'soiree_terminee';
   end if;
 
   pk := case p_table
@@ -216,8 +244,66 @@ begin
 end;
 $$;
 
-revoke all on function public.fete_write(text, text, text, jsonb, jsonb) from public;
-grant execute on function public.fete_write(text, text, text, jsonb, jsonb) to anon, authenticated;
+revoke all on function public.fete_write(text, text, text, jsonb, jsonb, uuid) from public;
+grant execute on function public.fete_write(text, text, text, jsonb, jsonb, uuid) to anon, authenticated;
+grant execute on function public.check_admin(text) to anon, authenticated;
+
+
+-- 3 bis. Nouvelle soirée : archive tout, puis remet à zéro --------
+
+create or replace function public.fete_new_party(
+  p_admin        text,
+  p_title        text    default '',
+  p_keep_members boolean default true
+) returns uuid
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  a_id uuid;
+  cfg  record;
+  snap jsonb := '{}'::jsonb;
+  t    text;
+  rows jsonb;
+begin
+  if coalesce((select admin_code from public.fete_secret where id = 1), '') = '' then
+    raise exception 'code_admin_non_defini';
+  end if;
+  if not public.check_admin(p_admin) then
+    raise exception 'code_admin_invalide' using errcode = '28000';
+  end if;
+
+  select * into cfg from public.party_config where id = 1;
+  foreach t in array array['party_config','places','drinks','members','expenses','photos','people','votes','spins'] loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x', t) into rows;
+    snap := snap || jsonb_build_object(t, rows);
+  end loop;
+
+  insert into public.archives (title, started_at, data)
+  values (coalesce(nullif(trim(cfg.title), ''), 'Soirée'), cfg.started_at, snap)
+  returning id into a_id;
+
+  -- ordre imposé par les liens entre tables
+  delete from public.votes    where true;
+  delete from public.spins    where true;
+  delete from public.photos   where true;   -- les fichiers restent dans le stockage, l'archive les affiche
+  delete from public.expenses where true;
+  delete from public.drinks   where true;
+  delete from public.people   where true;
+  delete from public.places   where true;
+  if not coalesce(p_keep_members, true) then
+    delete from public.members where true;
+  end if;
+
+  update public.party_config
+     set title = coalesce(trim(p_title), ''), epoch = gen_random_uuid(), started_at = now(), updated_at = now()
+   where id = 1;
+
+  return a_id;
+end;
+$$;
+revoke all on function public.fete_new_party(text, text, boolean) from public;
+grant execute on function public.fete_new_party(text, text, boolean) to anon, authenticated;
 grant execute on function public.check_code(text) to anon, authenticated;
 
 
@@ -233,6 +319,11 @@ begin
     execute format('create policy "fete_read" on public.%I for select to anon, authenticated using (true)', t);
   end loop;
 end $$;
+
+
+alter table public.archives enable row level security;
+drop policy if exists "fete_read" on public.archives;
+create policy "fete_read" on public.archives for select to anon, authenticated using (true);
 
 
 -- 5. Mises à jour en direct (realtime) --------------------------
@@ -272,6 +363,13 @@ create policy "fete_photos_add"  on storage.objects for insert to anon, authenti
 --  Pour supprimer le code : mettez '' (deux apostrophes).
 
 -- update public.fete_secret set code = 'MonCode' where id = 1;
+
+
+-- 8. Le code ADMIN (obligatoire pour « Nouvelle soirée ») ------------
+--  Retirez les deux tirets, remplacez MonCodeAdmin, puis Run.
+--  Gardez-le pour vous : il permet d'archiver et de tout remettre à zéro.
+
+-- update public.fete_secret set admin_code = 'MonCodeAdmin' where id = 1;
 
 
 -- Terminé. Vous devez voir "Success. No rows returned".
