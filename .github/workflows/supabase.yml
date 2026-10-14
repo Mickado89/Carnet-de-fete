@@ -1,0 +1,33 @@
+# Met à jour la base Supabase automatiquement à chaque modification de supabase.sql.
+# Prérequis (une seule fois) : le secret SUPABASE_DB_URL dans Settings → Secrets and variables → Actions.
+name: Mettre à jour la base Supabase
+
+on:
+  push:
+    branches: [main]
+    paths: ['supabase.sql']
+  workflow_dispatch:        # bouton « Run workflow » pour le lancer à la main
+
+concurrency:
+  group: supabase-db
+  cancel-in-progress: false
+
+jobs:
+  base:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Préparer psql
+        run: which psql || (sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client)
+
+      - name: Lancer supabase.sql
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "::error::Le secret SUPABASE_DB_URL est absent : ajoutez-le dans Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f supabase.sql
+          echo "Base Supabase à jour."
