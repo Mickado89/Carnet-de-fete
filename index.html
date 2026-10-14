@@ -245,6 +245,16 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
 .gatebox input{font-size:18px;text-align:center;letter-spacing:.06em}
 .gatebox .err{color:var(--bad);font-size:14px;min-height:1.2em}
 #installHelp{max-width:min(92vw,420px)}
+#archiveDlg{width:min(94vw,760px);background:var(--bg)}
+#archiveDlg .in{max-height:88vh;overflow:auto;padding:16px;display:grid;gap:14px}
+.pastlist{display:grid;gap:8px}
+.pastrow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.admin summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;font:800 16px var(--f-display);list-style:none}
+.admin summary::-webkit-details-marker{display:none}
+.admin summary::after{content:"▾";color:var(--muted);font-size:14px}
+.admin[open] summary::after{content:"▴"}
+.admin summary .tag{margin-left:auto}
+.adminbody{display:grid;gap:8px;margin-top:12px}
 #installHelp .in{padding:18px;display:grid;gap:10px}
 #installHelp ol{margin:0;padding-left:20px;display:grid;gap:4px}
 
@@ -508,6 +518,24 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   <!-- RÉCAP -->
   <section class="panel" id="tab-recap" hidden>
     <div id="recapBody" style="display:grid;gap:18px"></div>
+    <div class="card" style="display:grid;gap:10px">
+      <h3>Soirées passées</h3>
+      <div id="pastList" class="pastlist"><div class="small muted">Chargement…</div></div>
+    </div>
+    <details class="card admin" id="adminCard">
+      <summary><span>Nouvelle soirée</span><span class="tag">Admin</span></summary>
+      <div class="adminbody">
+        <p class="small" style="margin:0">Archive toute la soirée en cours (étapes, verres, retours, comptes, roulette, photos) dans « Soirées passées », puis remet le carnet à zéro <b>pour tout le monde</b>. Les adresses « Retour maison » et les prénoms restent sur chaque téléphone.</p>
+        <label class="small" for="npTitle">Nom de la nouvelle soirée (optionnel)</label>
+        <input id="npTitle" maxlength="60" placeholder="ex. Anniversaire de Léa">
+        <label class="small" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="npKeep" checked style="margin-top:3px"><span>Garder les participants aux comptes (<span id="npMembers"></span>)</span></label>
+        <label class="small" for="npCode">Code admin</label>
+        <input id="npCode" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Code admin">
+        <div class="capnote" id="npWarn" hidden></div>
+        <div id="npAction"></div>
+        <div class="small" id="npErr" style="color:var(--bad)"></div>
+      </div>
+    </details>
   </section>
 </div>
 
@@ -522,6 +550,14 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     <button class="btn" type="submit">Entrer</button>
   </form>
 </div>
+
+<!-- Récap d'une soirée passée -->
+<dialog id="archiveDlg" aria-labelledby="archiveTitle">
+  <div class="in">
+    <div class="row" style="justify-content:space-between"><div><div class="eyebrow">Soirée passée</div><h3 id="archiveTitle"></h3></div><button class="ghost" id="archiveClose" type="button">Fermer</button></div>
+    <div id="archiveBody" style="display:grid;gap:14px"></div>
+  </div>
+</dialog>
 
 <!-- Aide à l'installation -->
 <dialog id="installHelp">
@@ -654,7 +690,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     document.querySelectorAll('section.panel').forEach(s => s.hidden = s.id !== 'tab-' + name);
     lsSet('fete-tab', name);
     if (name === 'carte' && map) setTimeout(() => map.invalidateSize(), 50);
-    if (name === 'recap') renderRecap();
+    if (name === 'recap') { renderRecap(); loadArchives(); if ($('#adminCard').open) renderAdmin(); }
     if (name === 'photos') suggestPhotoPlace();
   }
   tabs.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
@@ -681,6 +717,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   /* ================================================================
      ÉTAT LOCAL + INSTANTANÉS (le site reste lisible hors ligne)
      ================================================================ */
+  let autoJoined = false;
   const TABLES = ['party_config', 'places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes', 'spins'];
   const PK = { party_config: ['id'], places: ['id'], drinks: ['device_id'], members: ['id'], expenses: ['id'], photos: ['id'], people: ['device_id'], votes: ['place_id', 'device_id'], spins: ['id'] };
   const S = { config: { id: 1, title: '', goal: 50 }, places: [], drinks: [], members: [], expenses: [], photos: [], people: [], votes: [], spins: [], loaded: {}, dbOutdated: false };
@@ -715,24 +752,28 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   }
   function write(table, kind, data = null, match = null) {
     if (!sb) { toast('Le site n’est pas encore relié à Supabase.'); return false; }
-    const op = { id: uuid(), table, kind, data, match };
+    const op = { id: uuid(), table, kind, data, match, epoch: S.config.epoch || null };
     applyOp(op); renderTable(table);
     queue.push(op); saveQueue(); renderNet();
     flush();
     return true;
   }
   let flushing = false, offline = !navigator.onLine;
+  let droppedOld = 0;
   async function flush() {
     if (flushing || !sb || !queue.length) { renderNet(); return; }
     flushing = true; renderNet();
     while (queue.length) {
       const op = queue[0];
       let error = null;
-      try { ({ error } = await sb.rpc('fete_write', { p_code: partyCode, p_table: op.table, p_kind: op.kind, p_data: op.data, p_match: op.match })); }
+      try { ({ error } = await sb.rpc('fete_write', { p_code: partyCode, p_table: op.table, p_kind: op.kind, p_data: op.data, p_match: op.match, p_epoch: op.epoch || null })); }
       catch (e) { error = e; }
       if (error) {
         if (isNetErr(error)) { offline = true; break; }
         if (/code_soiree_invalide/.test(error.message || '')) { showGate('Le code de la soirée est demandé.'); break; }
+        if (/soiree_terminee/.test(error.message || '')) {   // faite pendant la soirée précédente : on l'oublie
+          queue.shift(); saveQueue(); droppedOld++; continue;
+        }
         if (isMissingFn(error)) { dbOutdatedNotice(); break; }
         console.error(error);
         toast('Modification refusée : ' + (error.message || 'erreur inconnue'));
@@ -743,6 +784,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       queue.shift(); saveQueue();
     }
     flushing = false; renderNet();
+    if (droppedOld) { toast(`${droppedOld} modification${droppedOld > 1 ? 's' : ''} de la soirée précédente ignorée${droppedOld > 1 ? 's' : ''}.`); droppedOld = 0; TABLES.forEach(reload); }
   }
   function renderNet() {
     const b = $('#netBadge'), n = queue.length;
@@ -787,6 +829,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     for (const op of queue) if (op.table === t) applyOp(op);   // modifications pas encore envoyées
     S.loaded[t] = true;
     renderTable(t);
+    if (t === 'people' && !autoJoined && nick.value.trim() && !me()) { autoJoined = true; savePerson({}); }
   }
   const reloadTimers = {};
   const reload = t => { clearTimeout(reloadTimers[t]); reloadTimers[t] = setTimeout(() => load(t), 250); };
@@ -898,8 +941,6 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     } else if (t === 'expenses' && !old) {
       if (n.kind === 'refund') pushActivity(`Remboursement enregistré : ${memberName(n.payer)} → ${(n.for_ids || []).map(memberName).join(', ')} (${euro(n.cents)})`);
       else pushActivity(`${who(n.added_by)} a ajouté une dépense : ${n.label || 'sans titre'} (${euro(n.cents)})`);
-    } else if (t === 'spins' && !old) {
-      pushActivity(`Roulette russe : ${memberName(n.winner)} paye la tournée !`);
     } else if (t === 'members' && !old) {
       pushActivity(`${n.name} rejoint les comptes`);
     }
@@ -908,7 +949,25 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   /* ================================================================
      TITRE / OBJECTIF
      ================================================================ */
+  // nouvelle soirée détectée (lancée ici ou sur un autre téléphone) : on nettoie ce téléphone
+  function checkEpoch() {
+    const ep = S.config.epoch;
+    if (!ep || !S.loaded.party_config) return;
+    const known = lsGet('fete-epoch');
+    if (known === ep) return;
+    lsSet('fete-epoch', ep);
+    if (!known) return;                                  // premier passage avec cette version : rien à nettoyer
+    feed = []; unread = 0; lsSet('fete-feed', '[]'); renderFeed();
+    lsSet('fete-wanted', ''); lastTotal = null;
+    rOut = new Set(); lsSet('fete-rout', '[]');
+    unrevealed.clear(); lastAnimated = null; $('#rResult').replaceChildren();
+    queue = queue.filter(op => !op.epoch || op.epoch === ep); saveQueue(); renderNet();
+    autoJoined = false; firstFit = true; clearTrip();
+    toast(`Nouvelle soirée${(S.config.title || '').trim() ? ' : ' + S.config.title.trim() : ''}. Le carnet repart de zéro.`);
+    TABLES.forEach(t => t !== 'party_config' && reload(t));
+  }
   function renderConfig() {
+    checkEpoch();
     const t = (S.config.title || '').trim();
     const h1 = $('#partyTitle'); h1.textContent = t || 'La fête'; h1.append(el('span', { class: 'dot' }, '.'));
     document.title = t ? t + ' · Carnet de Fête' : 'Carnet de Fête';
@@ -1670,9 +1729,12 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   let rOut = new Set(lsJSON('fete-rout', []));       // participants écartés de la roue sur ce téléphone
   let wheelAngle = 0, wheelOrder = [], lastAnimated = null, spinning = false;
   const sortedSpins = () => [...S.spins].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  // tirages dont l'animation n'est pas finie : on n'en montre rien (ni grisé, ni historique, ni notification)
+  const unrevealed = new Set();
+  const revealedSpins = () => sortedSpins().filter(x => !unrevealed.has(x.id));
   function candidates() {
     let ids = S.members.filter(m => !rOut.has(m.id)).map(m => m.id);
-    const last = sortedSpins()[0];
+    const last = revealedSpins()[0];
     if ($('#rSpare').checked && last && ids.length > 2) ids = ids.filter(id => id !== last.winner);
     return ids;
   }
@@ -1698,8 +1760,10 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
   }
   function animateTo(spin) {
     const ids = (spin.participants || []).filter(id => S.members.some(m => m.id === id));
-    if (!ids.includes(spin.winner)) { showResult(spin); return; }
+    if (!ids.includes(spin.winner)) { unrevealed.delete(spin.id); showResult(spin); renderRouletteSide(); return; }
+    unrevealed.add(spin.id);
     spinning = true; $('#spinBtn').disabled = true;
+    renderRouletteSide();
     drawWheel(ids);
     const wheel = $('#wheel');
     const step = 360 / ids.length, i = ids.indexOf(spin.winner);
@@ -1714,7 +1778,11 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     wheel.classList.add('spinning');
     wheel.style.transform = `rotate(${wheelAngle}deg)`;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setTimeout(() => { spinning = false; $('#spinBtn').disabled = false; showResult(spin); renderRouletteSide(); }, reduce ? 50 : 4700);
+    setTimeout(() => {
+      spinning = false; unrevealed.delete(spin.id);
+      showResult(spin); renderRouletteSide();
+      if (spin.device_id !== deviceId) pushActivity(`Roulette russe : ${memberName(spin.winner)} paye la tournée !`);
+    }, reduce ? 50 : 4700);
   }
   function showResult(spin) {
     const who = memberName(spin.winner);
@@ -1738,7 +1806,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       box.append(el('span', { class: 'small muted' }, 'Ajoutez au moins deux participants dans « Participants aux dépenses » ci-dessous.'));
       $('#spinBtn').disabled = true;
     } else {
-      const last = sortedSpins()[0];
+      const last = revealedSpins()[0];
       S.members.forEach(m => {
         const spared = $('#rSpare').checked && last && last.winner === m.id && S.members.filter(x => !rOut.has(x.id)).length > 2;
         const lab = el('label', { class: 'check', title: spared ? 'A payé la dernière tournée' : '', style: spared ? 'opacity:.5' : null },
@@ -1751,7 +1819,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       });
       $('#spinBtn').disabled = spinning || candidates().length < 2;
     }
-    const hist = sortedSpins().slice(0, 5);
+    const hist = revealedSpins().slice(0, 5);
     $('#rHistory').replaceChildren(hist.length ? el('span', {}, 'Derniers tirages : ', hist.flatMap((h, i) => [i ? ' · ' : '', el('b', {}, memberName(h.winner)), ` (${fmtHour(h.created_at)})`])) : '');
   }
   // redessine la roue seulement si la liste des joueurs change (sinon on garde la position du dernier tirage)
@@ -1768,8 +1836,9 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
       lastAnimated = latest.id; refreshWheel(); showResult(latest); renderRouletteSide(); return;
     }
     if (latest && latest.id !== lastAnimated && S.loaded.spins) {   // nouveau tirage (ici ou sur un autre téléphone)
-      lastAnimated = latest.id; renderRouletteSide(); animateTo(latest); return;
+      lastAnimated = latest.id; unrevealed.add(latest.id); animateTo(latest); return;
     }
+    if (!latest && !spinning) $('#rResult').replaceChildren();
     refreshWheel();
     if (lastAnimated === null && S.loaded.spins) lastAnimated = '';
     renderRouletteSide();
@@ -1951,8 +2020,9 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     });
   }
   let lbPhoto = null;
-  function openLb(p) {
-    lbPhoto = p;
+  function openLb(p, readOnly = false) {
+    lbPhoto = readOnly ? null : p;
+    $('#lbPlace').closest('.row').hidden = readOnly;
     const url = photoUrl(p.path);
     $('#lbImg').src = url; $('#lbImg').alt = p.caption || '';
     $('#lbCap').textContent = p.caption || 'Sans légende';
@@ -1961,10 +2031,10 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     sel.replaceChildren(el('option', { value: '' }, 'Sans étape'), ...S.places.map(x => el('option', { value: x.id }, placeLabel(x))));
     sel.value = p.place_id || '';
     const a = $('#lbActions'); a.replaceChildren();
-    const pl = S.places.find(x => x.id === p.place_id);
+    const pl = readOnly ? null : S.places.find(x => x.id === p.place_id);
     if (pl && pl.lat != null) a.append(el('button', { class: 'ghost', type: 'button', onclick: () => { $('#lightbox').close(); showTab('carte'); focusPlace(pl); } }, 'Voir sur la carte'));
     a.append(el('a', { href: url + '?download=' + encodeURIComponent(p.path), class: 'small' }, 'Télécharger'));
-    a.append(confirmBtn('Retirer', () => { if (write('photos', 'delete', null, { id: p.id })) { $('#lightbox').close(); toast('Photo retirée'); } }, 'Retirer la photo'));
+    if (!readOnly) a.append(confirmBtn('Retirer', () => { if (write('photos', 'delete', null, { id: p.id })) { $('#lightbox').close(); toast('Photo retirée'); } }, 'Retirer la photo'));
     a.append(el('button', { class: 'ghost', type: 'button', onclick: () => $('#lightbox').close() }, 'Fermer'));
     if (!$('#lightbox').open) $('#lightbox').showModal();
   }
@@ -2001,7 +2071,7 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     const L = [];
     L.push(`${(S.config.title || 'La fête').trim()} — ${R.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}`);
     L.push(`📍 ${R.done.length}/${S.places.length} étapes${R.walked.km ? `, ${fmtDist(R.walked.km)} à pied` : ''}`);
-    L.push(`🍻 ${R.total} verres (${R.alc} avec alcool, ${R.soft} soft/eau)`);
+    L.push(`🍻 ${R.total} verre${R.total > 1 ? 's' : ''} (${R.alc} avec alcool, ${R.soft} soft/eau)`);
     if (R.champ) L.push(`🏆 Plus gros compteur : ${R.champ.name} (${R.champ.n})`);
     R.caps.forEach(c => L.push(`🚗 Capitaine : ${c.name}${c.alc ? '' : ' — zéro alcool, merci !'}`));
     if (R.spent) L.push(`💶 ${euro(R.spent)} dépensés${S.members.length ? `, soit ${euro(R.perHead)} par personne` : ''}`);
@@ -2009,14 +2079,14 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     if (R.homes.length) L.push(`🏠 Dernier rentré : ${R.homes[R.homes.length - 1].name} à ${fmtHour(R.homes[R.homes.length - 1].home_at)}`);
     return L.join('\n');
   }
-  function renderRecap() {
-    const R = recapData(), body = $('#recapBody');
+  function renderRecap(target, opts = {}) {
+    const R = recapData(), body = target || $('#recapBody');
     body.replaceChildren();
     const nothing = !S.places.length && !R.total && !S.expenses.length && !S.photos.length;
     body.append(el('div', { class: 'card recap-hero' },
       el('div', { class: 'eyebrow' }, R.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })),
       el('div', { class: 'big' }, (S.config.title || '').trim() || 'La fête'),
-      el('div', { class: 'small muted' }, nothing ? 'Le récap se remplit au fil de la soirée : étapes, verres, photos, dépenses et retours.' : 'Le résumé de la soirée, à partager le lendemain.')));
+      el('div', { class: 'small muted' }, opts.archive ? `Soirée archivée le ${new Date(opts.archive.archived_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}.` : nothing ? 'Le récap se remplit au fil de la soirée : étapes, verres, photos, dépenses et retours.' : 'Le résumé de la soirée, à partager le lendemain.')));
     if (nothing) return;
     const tile = (v, l, s) => el('div', { class: 'tile' }, el('div', { class: 'l' }, l), el('div', { class: 'v' }, v), s ? el('div', { class: 's' }, s) : null);
     body.append(el('div', { class: 'tiles' },
@@ -2036,7 +2106,9 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
     if (awards.length) body.append(el('div', { class: 'card', style: 'display:grid;gap:10px' }, el('h3', {}, 'Le palmarès'),
       el('ul', { class: 'awards' }, awards.map(([k, v]) => el('li', {}, el('span', { class: 'k' }, k), el('span', {}, v))))));
     if (R.mosaic.length) body.append(el('div', { class: 'card', style: 'display:grid;gap:10px' }, el('h3', {}, 'La soirée en photos'),
-      el('div', { class: 'mosaic' }, R.mosaic.map(p => el('button', { type: 'button', 'aria-label': 'Voir la photo', onclick: () => openLb(p) }, el('img', { src: photoUrl(p.path), alt: p.caption || '', loading: 'lazy' }))))));
+      el('div', { class: 'mosaic' }, (opts.archive ? R.photos : R.mosaic).map(p => el('button', { type: 'button', 'aria-label': 'Voir la photo', onclick: () => openLb(p, !!opts.archive) }, el('img', { src: photoUrl(p.path), alt: p.caption || '', loading: 'lazy' }))))));
+    if (R.pending.length) body.append(el('div', { class: 'card', style: 'display:grid;gap:8px' }, el('h3', {}, 'Remboursements restant à faire'),
+      R.pending.map(t => el('div', { class: 'row' }, el('b', {}, memberName(t.from)), el('span', { class: 'muted' }, 'doit'), el('b', { class: 'num' }, euro(t.cents)), el('span', { class: 'muted' }, 'à'), el('b', {}, memberName(t.to))))));
     const txt = recapText(R);
     body.append(el('div', { class: 'card', style: 'display:grid;gap:10px' },
       el('h3', {}, 'Partager le récap'),
@@ -2045,6 +2117,91 @@ dialog::backdrop{background:rgba(10,12,20,.75)}
         el('button', { class: 'btn', type: 'button', onclick: () => copyText(txt) }, 'Copier le récap'),
         navigator.share ? el('button', { class: 'ghost', type: 'button', onclick: () => navigator.share({ title: (S.config.title || 'La fête'), text: txt, url: location.href.split('#')[0] }).catch(() => {}) }, 'Partager…') : null)));
   }
+
+  /* ================================================================
+     SOIRÉES PASSÉES (archives) ET NOUVELLE SOIRÉE (admin)
+     ================================================================ */
+  const ARCH_KEYS = ['places', 'drinks', 'members', 'expenses', 'photos', 'people', 'votes', 'spins'];
+  function withArchive(data, fn) {
+    const saved = { config: S.config }; ARCH_KEYS.forEach(k => { saved[k] = S[k]; });
+    S.config = (data.party_config || [])[0] || { title: '' };
+    ARCH_KEYS.forEach(k => { S[k] = Array.isArray(data[k]) ? data[k] : []; });
+    S.places = [...S.places].sort((a, b) => (a.position || 0) - (b.position || 0));
+    try { fn(); } finally { Object.assign(S, saved); }
+  }
+  let archives = [];
+  async function loadArchives() {
+    if (!sb) return;
+    const box = $('#pastList');
+    try {
+      const { data, error } = await sb.from('archives').select('id,title,started_at,archived_at').order('archived_at', { ascending: false });
+      if (error) throw error;
+      archives = data || [];
+    } catch (e) {
+      if (isNetErr(e)) { box.replaceChildren(el('div', { class: 'small muted' }, 'Pas de réseau : la liste des soirées passées s’affichera au retour de la connexion.')); return; }
+      box.replaceChildren(el('div', { class: 'small muted' }, 'Soirées passées indisponibles : lancez le nouveau supabase.sql dans Supabase.')); return;
+    }
+    box.replaceChildren();
+    if (!archives.length) { box.append(el('div', { class: 'small muted' }, 'Aucune soirée archivée pour l’instant. Elles apparaîtront ici après chaque « Nouvelle soirée ».')); return; }
+    archives.forEach(a => box.append(el('div', { class: 'pastrow' },
+      el('div', { style: 'min-width:0' },
+        el('b', {}, a.title || 'Soirée'),
+        el('div', { class: 'small muted' }, (a.started_at ? new Date(a.started_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Date inconnue') + ' · archivée le ' + new Date(a.archived_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))),
+      el('button', { class: 'ghost', type: 'button', onclick: () => openArchive(a) }, 'Voir le récap'))));
+  }
+  async function openArchive(a) {
+    const body = $('#archiveBody');
+    body.replaceChildren(el('div', { class: 'small muted' }, 'Chargement…'));
+    $('#archiveTitle').textContent = a.title || 'Soirée';
+    if (!$('#archiveDlg').open) $('#archiveDlg').showModal();
+    try {
+      const { data, error } = await sb.from('archives').select('*').eq('id', a.id);
+      if (error) throw error;
+      const row = (data || [])[0]; if (!row) throw new Error('absente');
+      withArchive(row.data || {}, () => renderRecap(body, { archive: row }));
+    } catch (e) { body.replaceChildren(el('div', { class: 'small' }, isNetErr(e) ? 'Pas de réseau pour le moment.' : 'Cette soirée n’a pas pu être chargée.')); }
+  }
+  $('#archiveClose').addEventListener('click', () => $('#archiveDlg').close());
+  $('#archiveDlg').addEventListener('click', e => { if (e.target.id === 'archiveDlg') e.target.close(); });
+
+  function renderAdmin() {
+    $('#npMembers').textContent = S.members.length ? S.members.map(m => m.name).join(', ') : 'aucun';
+    const pend = settle(computeBalances().bal).length;
+    const out = S.people.filter(p => (p.name || '').trim() && !p.home_at).length;
+    const warn = [];
+    if (pend) warn.push(`${pend} remboursement${pend > 1 ? 's' : ''} pas encore fait${pend > 1 ? 's' : ''} : ${pend > 1 ? 'ils resteront' : 'il restera'} visible${pend > 1 ? 's' : ''} dans l’archive.`);
+    if (out) warn.push(`${out} personne${out > 1 ? 's' : ''} pas encore « bien rentrée${out > 1 ? 's' : ''} ».`);
+    if (queue.length) warn.push(`${queue.length} modification${queue.length > 1 ? 's' : ''} de ce téléphone pas encore envoyée${queue.length > 1 ? 's' : ''} (réseau).`);
+    $('#npWarn').hidden = !warn.length; $('#npWarn').replaceChildren(...warn.map(w => el('div', {}, w)));
+    $('#npAction').replaceChildren(confirmBtn('Archiver et commencer une nouvelle soirée', newParty, 'Tout archiver et remettre à zéro pour tout le monde'));
+  }
+  async function newParty() {
+    const err = $('#npErr'), code = $('#npCode').value.trim();
+    if (!sb) { err.textContent = 'Le site n’est pas relié à Supabase.'; return; }
+    if (!code) { err.textContent = 'Tapez le code admin.'; $('#npCode').focus(); return; }
+    if (!navigator.onLine) { err.textContent = 'Pas de réseau : la remise à zéro demande une connexion.'; return; }
+    if (queue.length) await flush();
+    err.textContent = 'Archivage en cours…';
+    let res;
+    try { res = await sb.rpc('fete_new_party', { p_admin: code, p_title: $('#npTitle').value.trim(), p_keep_members: $('#npKeep').checked }); }
+    catch (e) { res = { error: e }; }
+    const e = res.error;
+    if (e) {
+      const m = e.message || '';
+      err.textContent = /code_admin_non_defini/.test(m) ? 'Aucun code admin n’est encore défini. Dans Supabase (SQL Editor), lancez : update public.fete_secret set admin_code = \'VotreCode\' where id = 1;'
+        : /code_admin_invalide/.test(m) ? 'Code admin incorrect.'
+        : isMissingFn(e) ? 'Lancez d’abord le nouveau supabase.sql dans Supabase (SQL Editor).'
+        : isNetErr(e) ? 'Réseau perdu : rien n’a été modifié, réessayez.'
+        : 'Échec : ' + m;
+      return;
+    }
+    err.textContent = '';
+    $('#npCode').value = ''; $('#npTitle').value = ''; $('#adminCard').open = false;
+    await load('party_config');                       // déclenche le nettoyage de ce téléphone
+    TABLES.forEach(load); loadArchives();
+    toast('Soirée archivée. Le carnet repart de zéro pour tout le monde.');
+  }
+  $('#adminCard').addEventListener('toggle', () => { if ($('#adminCard').open) renderAdmin(); });
 
   /* ================================================================
      DÉMARRAGE

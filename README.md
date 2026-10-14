@@ -9,7 +9,7 @@ Site partagé pour une soirée entre amis. Il s'installe comme une appli sur le 
 | **Retour** | « Je suis bien rentré·e » et capitaine de soirée (optionnel) |
 | **Comptes** | Roulette russe (tirage au sort partagé de qui paye la tournée) et partage des dépenses, façon Tricount : qui doit quoi, message de remboursement à copier, bouton « Marquer remboursé » |
 | **Photos** | Galerie rangée par étape |
-| **Récap** | Le résumé du lendemain (chiffres, palmarès, photos), prêt à partager |
+| **Récap** | Le résumé du lendemain (chiffres, palmarès, photos, remboursements restants), prêt à partager · les **soirées passées** · le bouton admin **Nouvelle soirée** |
 
 En plus, sur toutes les pages :
 
@@ -67,6 +67,31 @@ Ouvrez le lien sur le téléphone, puis touchez **Installer l'appli** en haut de
 
 - **iPhone** : dans Safari, touchez *Partager*, puis *Sur l'écran d'accueil*.
 - **Android** : dans Chrome, Android propose l'installation directement.
+
+### 5. Définir le code admin (pour « Nouvelle soirée »)
+
+Dans Supabase, ouvrez **SQL Editor**, puis **New query**. Lancez la ligne suivante en remplaçant `MonCodeAdmin` par votre code, et gardez-le pour vous :
+```sql
+update public.fete_secret set admin_code = 'MonCodeAdmin' where id = 1;
+```
+
+---
+
+## Passer à une nouvelle soirée
+
+1. Dans l'onglet **Récap**, tout en bas, ouvrez **Nouvelle soirée** (marqué *Admin*).
+2. Remplissez les champs :
+   - donnez un nom à la nouvelle soirée (optionnel) ;
+   - choisissez de garder ou non la liste des participants aux comptes ;
+   - tapez le code admin.
+3. Touchez **Archiver et commencer une nouvelle soirée**, puis **Oui**.
+
+Ce que fait ce bouton :
+
+- **L'archivage** : toute la soirée est rangée dans **Soirées passées**, dans l'onglet Récap. Chaque soirée y garde son récap, ses photos et les remboursements restant à faire.
+- **La remise à zéro, pour tout le monde** : étapes, verres, retours, capitaine, dépenses, roulette et photos repartent de zéro.
+- **Sur chaque téléphone** : le carnet se nettoie tout seul, que le téléphone soit ouvert à ce moment ou plus tard. Les prénoms et les adresses « Retour maison » sont conservés.
+- **Les retardataires** : une modification faite pendant l'ancienne soirée par un téléphone resté hors ligne est ignorée, pour qu'elle ne pollue pas la nouvelle.
 
 ---
 
